@@ -1,0 +1,241 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://shaders/prototype_grid.gdshader" id="1_grid"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://scenes/props/crate.tscn" id="3_crate"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.3, 0.48, 0.78, 1)
+sky_horizon_color = Color(0.76, 0.83, 0.91, 1)
+ground_bottom_color = Color(0.2, 0.22, 0.26, 1)
+ground_horizon_color = Color(0.76, 0.83, 0.91, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 3
+ssao_enabled = true
+glow_enabled = true
+fog_enabled = true
+fog_light_color = Color(0.76, 0.83, 0.91, 1)
+fog_density = 0.004
+
+[sub_resource type="ShaderMaterial" id="Mat_grid"]
+shader = ExtResource("1_grid")
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+material = SubResource("Mat_grid")
+size = Vector3(80, 1, 80)
+
+[sub_resource type="BoxShape3D" id="Shape_floor"]
+size = Vector3(80, 1, 80)
+
+[sub_resource type="StandardMaterial3D" id="Mat_orange"]
+albedo_color = Color(0.93, 0.6, 0.38, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_teal"]
+albedo_color = Color(0.35, 0.68, 0.7, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_gray"]
+albedo_color = Color(0.55, 0.58, 0.64, 1)
+roughness = 0.85
+
+[sub_resource type="PhysicsMaterial" id="Phys_ice"]
+friction = 0.04
+
+[sub_resource type="StandardMaterial3D" id="Mat_ice"]
+albedo_color = Color(0.72, 0.88, 0.98, 1)
+metallic = 0.1
+roughness = 0.05
+clearcoat_enabled = true
+
+[sub_resource type="BoxMesh" id="Mesh_ice"]
+material = SubResource("Mat_ice")
+size = Vector3(12, 0.1, 12)
+
+[sub_resource type="BoxShape3D" id="Shape_ice"]
+size = Vector3(12, 0.1, 12)
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 10, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("Mesh_floor")
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("Shape_floor")
+
+[node name="Obstacles" type="Node3D" parent="."]
+
+[node name="Step1" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.25, -8)
+use_collision = true
+size = Vector3(2, 0.5, 2)
+material = SubResource("Mat_teal")
+
+[node name="Step2" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.5, -8)
+use_collision = true
+size = Vector3(2, 1, 2)
+material = SubResource("Mat_teal")
+
+[node name="Step3" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.75, -8)
+use_collision = true
+size = Vector3(2, 1.5, 2)
+material = SubResource("Mat_teal")
+
+[node name="Step4" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1, -8)
+use_collision = true
+size = Vector3(2, 2, 2)
+material = SubResource("Mat_teal")
+
+[node name="Ramp" type="CSGPolygon3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, -6)
+use_collision = true
+polygon = PackedVector2Array(0, 0, 8, 0, 0, 2.5)
+depth = 4.0
+material = SubResource("Mat_orange")
+
+[node name="RampPlatform" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 1.25, -8)
+use_collision = true
+size = Vector3(6, 2.5, 8)
+material = SubResource("Mat_gray")
+
+[node name="Pillar1" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 1.5, 4)
+use_collision = true
+size = Vector3(1.5, 3, 1.5)
+material = SubResource("Mat_orange")
+
+[node name="Pillar2" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 2, 6.5)
+use_collision = true
+size = Vector3(1.5, 4, 1.5)
+material = SubResource("Mat_orange")
+
+[node name="Pillar3" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.5, 2.5, 4.5)
+use_collision = true
+size = Vector3(1.5, 5, 1.5)
+material = SubResource("Mat_orange")
+
+[node name="ArchLeft" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1.5, 10)
+use_collision = true
+size = Vector3(1, 3, 6)
+material = SubResource("Mat_gray")
+
+[node name="ArchRight" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 1.5, 10)
+use_collision = true
+size = Vector3(1, 3, 6)
+material = SubResource("Mat_gray")
+
+[node name="ArchRoof" type="CSGBox3D" parent="Obstacles"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 3.25, 10)
+use_collision = true
+size = Vector3(5, 0.5, 6)
+material = SubResource("Mat_gray")
+
+[node name="IcePatch" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 14)
+physics_material_override = SubResource("Phys_ice")
+
+[node name="Mesh" type="MeshInstance3D" parent="IcePatch"]
+mesh = SubResource("Mesh_ice")
+
+[node name="Shape" type="CollisionShape3D" parent="IcePatch"]
+shape = SubResource("Shape_ice")
+
+[node name="Crates" type="Node3D" parent="."]
+
+[node name="Crate1" parent="Crates" instance=ExtResource("3_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.5, 3)
+
+[node name="Crate2" parent="Crates" instance=ExtResource("3_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.5, 3)
+
+[node name="Crate3" parent="Crates" instance=ExtResource("3_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.6, 13)
+
+[node name="Crate4" parent="Crates" instance=ExtResource("3_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.6, 15)
+
+[node name="Crate5" parent="Crates" instance=ExtResource("3_crate")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1.5, 13)
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="IceLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 8.5)
+billboard = 1
+text = "ЛЁД"
+font_size = 96
+outline_size = 16
+
+[node name="StepsLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 3.5, -8)
+billboard = 1
+text = "СТУПЕНИ"
+font_size = 96
+outline_size = 16
+
+[node name="RampLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 3.5, -6)
+billboard = 1
+text = "ПАНДУС"
+font_size = 96
+outline_size = 16
+
+[node name="HoverLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 6.5, 5)
+billboard = 1
+text = "ПАРЕНИЕ
+(держи прыжок в падении)"
+font_size = 72
+outline_size = 14
+
+[node name="ArchLabel" type="Label3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 4.5, 10)
+billboard = 1
+text = "ТЕСТ КАМЕРЫ"
+font_size = 72
+outline_size = 14
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Controls" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 420.0
+offset_bottom = 180.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
+theme_override_constants/outline_size = 6
+text = "WASD — движение
+Мышь — камера
+Пробел — прыжок (держать в падении — парение)
+Shift — быстро    Ctrl / C — тихо
+Esc — отпустить мышь (клик — вернуть)"
