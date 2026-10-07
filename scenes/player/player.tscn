@@ -3,8 +3,8 @@
 [ext_resource type="Script" path="res://scenes/player/player.gd" id="1_player"]
 
 [sub_resource type="CapsuleShape3D" id="Shape_body"]
-radius = 0.45
-height = 1.4
+radius = 0.4
+height = 1.45
 
 [sub_resource type="StandardMaterial3D" id="Mat_paint"]
 albedo_color = Color(0.86, 0.45, 0.17, 1)
@@ -15,6 +15,11 @@ roughness = 0.38
 albedo_color = Color(0.22, 0.23, 0.26, 1)
 metallic = 0.9
 roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_joint"]
+albedo_color = Color(0.12, 0.12, 0.14, 1)
+metallic = 0.7
+roughness = 0.45
 
 [sub_resource type="StandardMaterial3D" id="Mat_glass"]
 albedo_color = Color(0.04, 0.06, 0.08, 1)
@@ -41,113 +46,331 @@ emission_energy_multiplier = 6.0
 
 [sub_resource type="SphereMesh" id="Mesh_body"]
 material = SubResource("Mat_paint")
-radius = 0.5
-height = 1.0
+radius = 0.45
+height = 0.9
 
 [sub_resource type="TorusMesh" id="Mesh_ring"]
 material = SubResource("Mat_metal")
-inner_radius = 0.44
-outer_radius = 0.54
+inner_radius = 0.4
+outer_radius = 0.49
 
 [sub_resource type="CylinderMesh" id="Mesh_lens"]
 material = SubResource("Mat_glass")
-top_radius = 0.24
-bottom_radius = 0.24
+top_radius = 0.2
+bottom_radius = 0.2
 height = 0.12
 
 [sub_resource type="SphereMesh" id="Mesh_pupil"]
 material = SubResource("Mat_eye")
-radius = 0.1
-height = 0.2
+radius = 0.085
+height = 0.17
 
 [sub_resource type="CylinderMesh" id="Mesh_antenna"]
 material = SubResource("Mat_metal")
 top_radius = 0.02
 bottom_radius = 0.025
-height = 0.4
+height = 0.35
 
 [sub_resource type="SphereMesh" id="Mesh_antenna_tip"]
 material = SubResource("Mat_antenna_tip")
-radius = 0.06
-height = 0.12
-
-[sub_resource type="CapsuleMesh" id="Mesh_arm"]
-material = SubResource("Mat_metal")
-radius = 0.07
-height = 0.35
+radius = 0.055
+height = 0.11
 
 [sub_resource type="CylinderMesh" id="Mesh_thruster"]
 material = SubResource("Mat_metal")
-top_radius = 0.2
-bottom_radius = 0.1
-height = 0.25
+top_radius = 0.15
+bottom_radius = 0.08
+height = 0.18
 
 [sub_resource type="SphereMesh" id="Mesh_thruster_glow"]
 material = SubResource("Mat_thruster_glow")
-radius = 0.09
-height = 0.18
+radius = 0.07
+height = 0.14
+
+[sub_resource type="SphereMesh" id="Mesh_shoulder"]
+material = SubResource("Mat_joint")
+radius = 0.08
+height = 0.16
+
+[sub_resource type="CapsuleMesh" id="Mesh_arm"]
+material = SubResource("Mat_metal")
+radius = 0.055
+height = 0.6
+
+[sub_resource type="BoxMesh" id="Mesh_claw"]
+material = SubResource("Mat_joint")
+size = Vector3(0.06, 0.16, 0.12)
+
+[sub_resource type="SphereMesh" id="Mesh_hip"]
+material = SubResource("Mat_joint")
+radius = 0.07
+height = 0.14
+
+[sub_resource type="CylinderMesh" id="Mesh_thigh"]
+material = SubResource("Mat_metal")
+top_radius = 0.05
+bottom_radius = 0.045
+height = 0.3
+
+[sub_resource type="SphereMesh" id="Mesh_knee"]
+material = SubResource("Mat_joint")
+radius = 0.06
+height = 0.12
+
+[sub_resource type="CylinderMesh" id="Mesh_shin"]
+material = SubResource("Mat_metal")
+top_radius = 0.045
+bottom_radius = 0.04
+height = 0.28
+
+[sub_resource type="BoxMesh" id="Mesh_foot"]
+material = SubResource("Mat_paint")
+size = Vector3(0.14, 0.06, 0.24)
+
+[sub_resource type="BoxShape3D" id="Shape_pickup"]
+size = Vector3(1.4, 1.4, 1.4)
 
 [sub_resource type="SphereShape3D" id="Shape_camera"]
 radius = 0.2
+
+[sub_resource type="Curve" id="Curve_fade"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="CurveTexture" id="CT_fade"]
+curve = SubResource("Curve_fade")
+
+[sub_resource type="ParticleProcessMaterial" id="PM_trail"]
+direction = Vector3(0, -0.3, 1)
+spread = 20.0
+initial_velocity_min = 1.5
+initial_velocity_max = 3.0
+gravity = Vector3(0, 1, 0)
+scale_min = 0.6
+scale_max = 1.2
+scale_curve = SubResource("CT_fade")
+
+[sub_resource type="StandardMaterial3D" id="Mat_particle_fire"]
+albedo_color = Color(1, 0.6, 0.2, 1)
+emission_enabled = true
+emission = Color(1, 0.5, 0.15, 1)
+emission_energy_multiplier = 4.0
+
+[sub_resource type="SphereMesh" id="Mesh_particle_fire"]
+material = SubResource("Mat_particle_fire")
+radius = 0.06
+height = 0.12
+radial_segments = 8
+rings = 4
+
+[sub_resource type="ParticleProcessMaterial" id="PM_steam"]
+direction = Vector3(0, 1, 0)
+spread = 30.0
+initial_velocity_min = 0.8
+initial_velocity_max = 1.6
+gravity = Vector3(0, 0.6, 0)
+damping_min = 0.5
+damping_max = 1.0
+scale_min = 0.8
+scale_max = 1.6
+scale_curve = SubResource("CT_fade")
+
+[sub_resource type="StandardMaterial3D" id="Mat_particle_steam"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.95, 0.97, 1, 0.6)
+
+[sub_resource type="SphereMesh" id="Mesh_particle_steam"]
+material = SubResource("Mat_particle_steam")
+radius = 0.1
+height = 0.2
+radial_segments = 8
+rings = 4
+
+[sub_resource type="ParticleProcessMaterial" id="PM_sparks"]
+direction = Vector3(0, 1, 0)
+spread = 85.0
+initial_velocity_min = 3.0
+initial_velocity_max = 7.0
+gravity = Vector3(0, -12, 0)
+scale_min = 0.5
+scale_max = 1.0
+scale_curve = SubResource("CT_fade")
+
+[sub_resource type="StandardMaterial3D" id="Mat_particle_spark"]
+albedo_color = Color(1, 0.85, 0.3, 1)
+emission_enabled = true
+emission = Color(1, 0.8, 0.25, 1)
+emission_energy_multiplier = 8.0
+
+[sub_resource type="SphereMesh" id="Mesh_particle_spark"]
+material = SubResource("Mat_particle_spark")
+radius = 0.035
+height = 0.07
+radial_segments = 6
+rings = 3
 
 [node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.725, 0)
 shape = SubResource("Shape_body")
 
 [node name="Visual" type="Node3D" parent="."]
 
 [node name="Body" type="Node3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
 
 [node name="Shell" type="MeshInstance3D" parent="Visual/Body"]
 mesh = SubResource("Mesh_body")
 
 [node name="Ring" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.18, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16, 0)
 mesh = SubResource("Mesh_ring")
 
 [node name="Lens" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.12, -0.44)
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.1, -0.4)
 mesh = SubResource("Mesh_lens")
 
 [node name="Pupil" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, -0.49)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -0.45)
 mesh = SubResource("Mesh_pupil")
 
 [node name="Antenna" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0.15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, 0.12)
 mesh = SubResource("Mesh_antenna")
 
 [node name="AntennaTip" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.87, 0.15)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.78, 0.12)
 mesh = SubResource("Mesh_antenna_tip")
 
-[node name="ArmLeft" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.52, -0.05, 0)
-mesh = SubResource("Mesh_arm")
-
-[node name="ArmRight" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.52, -0.05, 0)
-mesh = SubResource("Mesh_arm")
-
 [node name="Thruster" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.45, 0.08)
 mesh = SubResource("Mesh_thruster")
 
 [node name="ThrusterGlow" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.56, 0.08)
 mesh = SubResource("Mesh_thruster_glow")
 
 [node name="ThrusterLight" type="OmniLight3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.85, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.7, 0.08)
 light_color = Color(1, 0.6, 0.25, 1)
 omni_range = 2.5
 
+[node name="SprintTrail" type="GPUParticles3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.55, 0.12)
+emitting = false
+amount = 40
+lifetime = 0.4
+process_material = SubResource("PM_trail")
+draw_pass_1 = SubResource("Mesh_particle_fire")
+
+[node name="Steam" type="GPUParticles3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0.05)
+emitting = false
+amount = 24
+lifetime = 1.0
+process_material = SubResource("PM_steam")
+draw_pass_1 = SubResource("Mesh_particle_steam")
+
+[node name="ArmLeft" type="Node3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.42, -0.02, -0.08)
+
+[node name="Shoulder" type="MeshInstance3D" parent="Visual/Body/ArmLeft"]
+mesh = SubResource("Mesh_shoulder")
+
+[node name="Arm" type="MeshInstance3D" parent="Visual/Body/ArmLeft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+mesh = SubResource("Mesh_arm")
+
+[node name="Claw" type="MeshInstance3D" parent="Visual/Body/ArmLeft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.05, -0.62, 0)
+mesh = SubResource("Mesh_claw")
+
+[node name="ArmRight" type="Node3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, -0.02, -0.08)
+
+[node name="Shoulder" type="MeshInstance3D" parent="Visual/Body/ArmRight"]
+mesh = SubResource("Mesh_shoulder")
+
+[node name="Arm" type="MeshInstance3D" parent="Visual/Body/ArmRight"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+mesh = SubResource("Mesh_arm")
+
+[node name="Claw" type="MeshInstance3D" parent="Visual/Body/ArmRight"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.05, -0.62, 0)
+mesh = SubResource("Mesh_claw")
+
+[node name="HoldPoint" type="Node3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.06, -0.74)
+
+[node name="LegLeft" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.2, 0.62, 0)
+
+[node name="Hip" type="MeshInstance3D" parent="Visual/LegLeft"]
+mesh = SubResource("Mesh_hip")
+
+[node name="Thigh" type="MeshInstance3D" parent="Visual/LegLeft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, 0)
+mesh = SubResource("Mesh_thigh")
+
+[node name="Knee" type="Node3D" parent="Visual/LegLeft"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+
+[node name="KneeJoint" type="MeshInstance3D" parent="Visual/LegLeft/Knee"]
+mesh = SubResource("Mesh_knee")
+
+[node name="Shin" type="MeshInstance3D" parent="Visual/LegLeft/Knee"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.14, 0)
+mesh = SubResource("Mesh_shin")
+
+[node name="Foot" type="MeshInstance3D" parent="Visual/LegLeft/Knee"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.29, -0.04)
+mesh = SubResource("Mesh_foot")
+
+[node name="LegRight" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 0.62, 0)
+
+[node name="Hip" type="MeshInstance3D" parent="Visual/LegRight"]
+mesh = SubResource("Mesh_hip")
+
+[node name="Thigh" type="MeshInstance3D" parent="Visual/LegRight"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.15, 0)
+mesh = SubResource("Mesh_thigh")
+
+[node name="Knee" type="Node3D" parent="Visual/LegRight"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+
+[node name="KneeJoint" type="MeshInstance3D" parent="Visual/LegRight/Knee"]
+mesh = SubResource("Mesh_knee")
+
+[node name="Shin" type="MeshInstance3D" parent="Visual/LegRight/Knee"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.14, 0)
+mesh = SubResource("Mesh_shin")
+
+[node name="Foot" type="MeshInstance3D" parent="Visual/LegRight/Knee"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.29, -0.04)
+mesh = SubResource("Mesh_foot")
+
+[node name="PickupZone" type="Area3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -0.9)
+
+[node name="Shape" type="CollisionShape3D" parent="Visual/PickupZone"]
+shape = SubResource("Shape_pickup")
+
+[node name="Sparks" type="GPUParticles3D" parent="."]
+top_level = true
+emitting = false
+amount = 28
+lifetime = 0.5
+one_shot = true
+explosiveness = 1.0
+process_material = SubResource("PM_sparks")
+draw_pass_1 = SubResource("Mesh_particle_spark")
+
 [node name="CameraPivot" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot"]
 shape = SubResource("Shape_camera")
@@ -156,3 +379,74 @@ margin = 0.2
 
 [node name="Camera3D" type="Camera3D" parent="CameraPivot/SpringArm3D"]
 fov = 70.0
+
+[node name="CarryHUD" type="CanvasLayer" parent="."]
+
+[node name="Panel" type="VBoxContainer" parent="CarryHUD"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -150.0
+offset_right = 190.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+alignment = 2
+
+[node name="Prompt" type="Label" parent="CarryHUD/Panel"]
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 6
+horizontal_alignment = 1
+
+[node name="ParcelInfo" type="Label" parent="CarryHUD/Panel"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 6
+horizontal_alignment = 1
+
+[node name="StabilityRow" type="HBoxContainer" parent="CarryHUD/Panel"]
+visible = false
+layout_mode = 2
+
+[node name="Caption" type="Label" parent="CarryHUD/Panel/StabilityRow"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 6
+text = "Устойчивость"
+
+[node name="Bar" type="ProgressBar" parent="CarryHUD/Panel/StabilityRow"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.001
+value = 1.0
+show_percentage = false
+
+[node name="StaminaRow" type="HBoxContainer" parent="CarryHUD/Panel"]
+visible = false
+layout_mode = 2
+
+[node name="Caption" type="Label" parent="CarryHUD/Panel/StaminaRow"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 6
+text = "Выносливость"
+
+[node name="Bar" type="ProgressBar" parent="CarryHUD/Panel/StaminaRow"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.001
+value = 1.0
+show_percentage = false

@@ -1,0 +1,51 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/obstacles/moving_body.gd" id="1_move"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_pusher"]
+albedo_color = Color(0.95, 0.75, 0.15, 1)
+metallic = 0.4
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_stripe"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+roughness = 0.6
+
+[sub_resource type="BoxMesh" id="Mesh_pusher"]
+material = SubResource("Mat_pusher")
+size = Vector3(1.2, 1.4, 1.2)
+
+[sub_resource type="BoxMesh" id="Mesh_stripe"]
+material = SubResource("Mat_stripe")
+size = Vector3(1.22, 0.2, 1.22)
+
+[sub_resource type="BoxShape3D" id="Shape_pusher"]
+size = Vector3(1.2, 1.4, 1.2)
+
+[sub_resource type="BoxShape3D" id="Shape_hit"]
+size = Vector3(1.6, 1.5, 1.6)
+
+[node name="Pusher" type="AnimatableBody3D"]
+script = ExtResource("1_move")
+travel = Vector3(5, 0, 0)
+period = 2.6
+hit_strength = 1.2
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("Mesh_pusher")
+
+[node name="StripeTop" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+mesh = SubResource("Mesh_stripe")
+
+[node name="StripeBottom" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+mesh = SubResource("Mesh_stripe")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_pusher")
+
+[node name="HitArea" type="Area3D" parent="."]
+
+[node name="Shape" type="CollisionShape3D" parent="HitArea"]
+shape = SubResource("Shape_hit")

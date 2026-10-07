@@ -1,0 +1,80 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/obstacles/pendulum.gd" id="1_pendulum"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_frame"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+metallic = 0.7
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="Mat_head"]
+albedo_color = Color(0.8, 0.15, 0.12, 1)
+metallic = 0.6
+roughness = 0.35
+
+[sub_resource type="CylinderMesh" id="Mesh_rod"]
+material = SubResource("Mat_frame")
+top_radius = 0.05
+bottom_radius = 0.05
+height = 3.6
+
+[sub_resource type="CylinderShape3D" id="Shape_rod"]
+radius = 0.05
+height = 3.6
+
+[sub_resource type="SphereMesh" id="Mesh_head"]
+material = SubResource("Mat_head")
+radius = 0.5
+height = 1.0
+
+[sub_resource type="SphereShape3D" id="Shape_head"]
+radius = 0.5
+
+[sub_resource type="SphereShape3D" id="Shape_hit"]
+radius = 0.7
+
+[node name="Pendulum" type="Node3D"]
+script = ExtResource("1_pendulum")
+
+[node name="PostLeft" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4, 2.6, 0)
+use_collision = true
+size = Vector3(0.3, 5.2, 0.3)
+material = SubResource("Mat_frame")
+
+[node name="PostRight" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, 2.6, 0)
+use_collision = true
+size = Vector3(0.3, 5.2, 0.3)
+material = SubResource("Mat_frame")
+
+[node name="Beam" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.2, 0)
+use_collision = true
+size = Vector3(7.1, 0.3, 0.3)
+material = SubResource("Mat_frame")
+
+[node name="Swing" type="AnimatableBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 0)
+
+[node name="Rod" type="MeshInstance3D" parent="Swing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.8, 0)
+mesh = SubResource("Mesh_rod")
+
+[node name="RodShape" type="CollisionShape3D" parent="Swing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.8, 0)
+shape = SubResource("Shape_rod")
+
+[node name="Head" type="MeshInstance3D" parent="Swing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.9, 0)
+mesh = SubResource("Mesh_head")
+
+[node name="HeadShape" type="CollisionShape3D" parent="Swing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.9, 0)
+shape = SubResource("Shape_head")
+
+[node name="HitArea" type="Area3D" parent="Swing"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3.9, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Swing/HitArea"]
+shape = SubResource("Shape_hit")

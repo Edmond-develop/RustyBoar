@@ -1,7 +1,7 @@
 extends Node
 ## Регистрирует все кнопки управления при запуске игры.
 ## Используем physical_keycode — привязку к физическому положению клавиши,
-## поэтому WASD работает и при включённой русской раскладке.
+## поэтому управление работает и при включённой русской раскладке.
 
 const STICK_DEADZONE := 0.2
 
@@ -15,6 +15,8 @@ func _ready() -> void:
 	_bind_keys("jump", [KEY_SPACE])
 	_bind_keys("sprint", [KEY_SHIFT])
 	_bind_keys("quiet", [KEY_CTRL, KEY_C])
+	_bind_keys("interact", [KEY_E])
+	_bind_keys("throw", [KEY_Q])
 
 	# --- Геймпад: левый стик — движение ---
 	_bind_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)
@@ -30,6 +32,8 @@ func _ready() -> void:
 
 	# --- Геймпад: кнопки ---
 	_bind_button("jump", JOY_BUTTON_A)
+	_bind_button("interact", JOY_BUTTON_X)
+	_bind_button("throw", JOY_BUTTON_Y)
 	_bind_button("sprint", JOY_BUTTON_LEFT_STICK)
 	_bind_button("quiet", JOY_BUTTON_RIGHT_SHOULDER)
 

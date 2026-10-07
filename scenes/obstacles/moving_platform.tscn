@@ -1,0 +1,27 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/obstacles/moving_body.gd" id="1_move"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_platform"]
+albedo_color = Color(0.3, 0.65, 0.68, 1)
+metallic = 0.3
+roughness = 0.55
+
+[sub_resource type="BoxMesh" id="Mesh_platform"]
+material = SubResource("Mat_platform")
+size = Vector3(3, 0.3, 3)
+
+[sub_resource type="BoxShape3D" id="Shape_platform"]
+size = Vector3(3, 0.3, 3)
+
+[node name="MovingPlatform" type="AnimatableBody3D"]
+script = ExtResource("1_move")
+travel = Vector3(0, 0, 6)
+period = 5.0
+hit_strength = 0.0
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("Mesh_platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_platform")
