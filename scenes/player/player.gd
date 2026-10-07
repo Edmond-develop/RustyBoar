@@ -7,7 +7,16 @@ extends CharacterBody3D
 ## Устойчивость посылки падает от: бега с посылкой, резких манёвров на скорости,
 ## прыжков, жёстких приземлений и ударов. Сильный удар сразу роняет посылку.
 ##
-## Столкновения: дрон отскакивает, шатается, летят искры, трясётся камера.
+## Столкновения: на шаге — просто упирается. Сильный удар (на бегу, маятник,
+## толкатель) — отскок, шатание, искры, урон дрону и посылке.
+##
+## Здоровье: кончилось — дрон ломается, роняет посылку и через пару секунд
+## возрождается на старте уровня.
+
+signal health_changed(health: float, max_health: float)
+signal died
+signal respawned
+signal landed(fall_speed: float)
 
 @export_group("Движение")
 @export var walk_speed := 6.0
@@ -20,6 +29,7 @@ extends CharacterBody3D
 @export var min_grip := 0.06            ## Минимальное сцепление (на самом скользком льду)
 
 @export_group("Выносливость")
+@export var sprint_hold_time := 0.12   ## Shift нужно удерживать хотя бы столько, чтобы начать бег
 @export var stamina_max := 100.0
 @export var stamina_drain := 22.0       ## Расход в секунду при беге
 @export var stamina_regen := 28.0       ## Восстановление в секунду
@@ -28,6 +38,15 @@ extends CharacterBody3D
 @export var exhausted_duration := 2.4   ## Сколько длится «выдохся»
 @export var exhausted_pause := 0.6      ## Первые секунды — стоит на месте
 @export var exhausted_speed_mult := 0.45
+
+@export_group("Здоровье")
+@export var max_health := 100.0
+@export var hazard_damage := 4.0        ## Урон за каждый м/с удара маятника/толкателя
+@export var wall_damage := 3.0          ## Урон за удар о стену на бегу
+@export var fall_damage_speed := 12.0   ## Падения быстрее этого (м/с) ранят дрона
+@export var fall_damage := 6.0          ## Урон за каждый м/с сверх порога
+@export var respawn_delay := 1.8
+@export var invulnerable_time := 1.5    ## Неуязвимость после возрождения
 
 @export_group("Прыжок")
 @export var jump_velocity := 6.5
@@ -53,7 +72,7 @@ extends CharacterBody3D
 @export var hit_damage := 3.0            ## % цены за каждый м/с удара
 
 @export_group("Столкновения")
-@export var impact_threshold := 2.5      ## Удары слабее (м/с) не считаются
+@export var hit_threshold := 7.0         ## Удары слабее (м/с) безвредны — например, на шаге
 @export var wall_knockback := 0.6        ## Отскок от стен
 @export var hazard_knockback := 1.0      ## Отлёт от маятников и толкателей
 @export var light_object_mass := 20.0    ## Предметы легче почти не тормозят дрона
@@ -70,6 +89,12 @@ extends CharacterBody3D
 @export var min_pitch_deg := -70.0
 @export var max_pitch_deg := 35.0
 @export var start_pitch_deg := -18.0
+
+@export_group("Шум и ветер")
+@export var walk_noise := 0.3           ## Шум от ходьбы (0..1)
+@export var run_noise := 1.0            ## Шум от бега
+@export var quiet_noise := 0.05         ## Шум тихого хода
+@export var wind_instability := 0.04    ## Как ветер раскачивает посылку
 
 @export_group("Прочее")
 @export var fall_limit_y := -20.0
@@ -101,18 +126,32 @@ const BODY_HEIGHT := 0.95
 @onready var stamina_row: Control = $CarryHUD/Panel/StaminaRow
 @onready var stamina_caption: Label = $CarryHUD/Panel/StaminaRow/Caption
 @onready var stamina_bar: ProgressBar = $CarryHUD/Panel/StaminaRow/Bar
+@onready var health_bar: ProgressBar = $CarryHUD/Panel/HealthRow/Bar
+@onready var damage_flash: ColorRect = $CarryHUD/DamageFlash
+@onready var death_label: Label = $CarryHUD/DeathLabel
 
 var surface_grip := 1.0
 var held_parcel: Parcel = null
 var instability := 0.0
 var stamina := 100.0
 var is_sprinting := false
+var health := 100.0
+var is_dead := false
+var noise := 0.0                ## Насколько громко сейчас дрон (для лавин и сосулек)
 
 var _time := 0.0
 var _coyote_timer := 0.0
 var _jump_buffer_timer := 0.0
 var _pickup_cooldown := 0.0
 var _regen_timer := 0.0
+var _sprint_hold := 0.0
+var _dead_timer := 0.0
+var _invuln_timer := 0.0
+var _noise_burst := 0.0
+var _wind := Vector3.ZERO
+var _last_wind := Vector3.ZERO
+var _floor_collider: Object = null
+var _default_death_text := ""
 var _exhausted_timer := 0.0
 var _stagger_timer := 0.0
 var _stagger_total := 1.0
@@ -131,6 +170,9 @@ var _thruster_power := 0.3
 func _ready() -> void:
 	_spawn_position = global_position
 	stamina = stamina_max
+	health = max_health
+	add_to_group("player")
+	_default_death_text = death_label.text
 	spring_arm.add_excluded_object(get_rid())
 	camera_pivot.rotation.x = deg_to_rad(start_pitch_deg)
 	camera.fov = base_fov
@@ -155,6 +197,12 @@ func _physics_process(delta: float) -> void:
 	_pickup_cooldown -= delta
 	_hit_cooldown -= delta
 	_stagger_timer = maxf(_stagger_timer - delta, 0.0)
+	_invuln_timer -= delta
+	if is_dead:
+		_dead_timer -= delta
+		if _dead_timer <= 0.0:
+			respawn()
+			return
 
 	var on_floor := is_on_floor()
 	var exhausted := _exhausted_timer > 0.0
@@ -175,12 +223,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		_jump_buffer_timer -= delta
 
-	var can_jump := not paused and not staggered
+	var can_jump := not paused and not staggered and not is_dead
 	if can_jump and _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
 		velocity.y = jump_velocity * (carry_jump_mult if held_parcel else 1.0)
 		_jump_buffer_timer = 0.0
 		_coyote_timer = 0.0
 		_thruster_power = 6.0
+		_noise_burst += 0.5
 		if held_parcel:
 			instability += jump_instability
 
@@ -188,7 +237,9 @@ func _physics_process(delta: float) -> void:
 		velocity.y *= jump_cut
 
 	# --- Взять / положить / бросить ---
-	if Input.is_action_just_pressed("interact"):
+	if is_dead:
+		pass
+	elif Input.is_action_just_pressed("interact"):
 		if held_parcel:
 			_put_down()
 		else:
@@ -199,7 +250,7 @@ func _physics_process(delta: float) -> void:
 
 	# --- Ввод относительно камеры ---
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if paused or staggered:
+	if paused or staggered or is_dead:
 		input_dir = Vector2.ZERO
 	var cam_basis := camera_pivot.global_transform.basis
 	var forward := -cam_basis.z
@@ -226,8 +277,12 @@ func _physics_process(delta: float) -> void:
 		target_speed *= carry_speed_mult
 
 	var target_velocity := direction * target_speed
+	# Ветер сносит: он добавляется к желаемой скорости, приходится рулить против
+	_last_wind = Vector3(_wind.x, 0.0, _wind.z)
+	_wind = Vector3.ZERO
+	target_velocity += _last_wind
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
-	var rate := acceleration if has_input else deceleration
+	var rate := acceleration if (has_input or _last_wind.length() > 0.1) else deceleration
 	if carrying:
 		rate *= carry_accel_mult
 	rate *= surface_grip if on_floor else air_control
@@ -244,8 +299,14 @@ func _physics_process(delta: float) -> void:
 
 	var now_on_floor := is_on_floor()
 	var just_landed := now_on_floor and not _was_on_floor
+	if just_landed:
+		landed.emit(-pre_move_velocity.y)
+		_noise_burst += clampf(-pre_move_velocity.y * 0.08, 0.0, 1.5)
+	if just_landed and -pre_move_velocity.y > fall_damage_speed:
+		take_damage((-pre_move_velocity.y - fall_damage_speed) * fall_damage)
 
 	_update_carry(delta, just_landed, pre_move_velocity)
+	_update_noise(delta, has_input)
 	_update_visual(delta, direction, target_speed, just_landed)
 	_update_camera(delta)
 	_update_hud()
@@ -254,19 +315,109 @@ func _physics_process(delta: float) -> void:
 	_prev_velocity = velocity
 
 	if global_position.y < fall_limit_y:
-		respawn()
+		velocity = Vector3.ZERO
+		if not is_dead:
+			_die()
 
 
 func respawn() -> void:
 	global_position = _spawn_position
 	velocity = Vector3.ZERO
 	_prev_velocity = Vector3.ZERO
+	is_dead = false
+	health = max_health
+	stamina = stamina_max
+	_exhausted_timer = 0.0
+	_stagger_timer = 0.0
+	_invuln_timer = invulnerable_time
+	body.rotation = Vector3.ZERO
+	death_label.text = _default_death_text
+	health_changed.emit(health, max_health)
+	respawned.emit()
+
+
+func take_damage(amount: float) -> void:
+	if is_dead or _invuln_timer > 0.0 or amount <= 0.0:
+		return
+	health = maxf(health - amount, 0.0)
+	health_changed.emit(health, max_health)
+	damage_flash.color.a = clampf(0.15 + amount * 0.01, 0.15, 0.45)
+	if health <= 0.0:
+		_die()
+
+
+## Мгновенная поломка (провалился под лёд и т.п.)
+func kill(reason: String = "") -> void:
+	if is_dead:
+		return
+	if reason != "":
+		death_label.text = reason + "\nВозвращаемся на склад..."
+	_die()
+
+
+## Ветер (вызывается каждый кадр зоной метели). Скорость, с которой сносит дрона.
+func apply_wind(wind_velocity: Vector3) -> void:
+	_wind += wind_velocity
+
+
+func add_shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
+
+
+func get_noise() -> float:
+	return noise
+
+
+## Стоит ли дрон на надёжной земле (не на льду над пропастью и т.п.)
+func is_on_safe_ground() -> bool:
+	return is_on_floor() and _floor_collider != null and is_instance_valid(_floor_collider) \
+		and (_floor_collider as Node).is_in_group("safe_ground")
+
+
+## Удар лавины: роняет посылку, сильно отбрасывает и ранит.
+func receive_avalanche(push_dir: Vector3) -> void:
+	if is_dead or _invuln_timer > 0.0:
+		return
+	if held_parcel != null:
+		_fumble()
+	_hit_cooldown = 0.0
+	_take_impact(push_dir, 13.0, global_position + Vector3.UP * BODY_HEIGHT, 1.1, 35.0)
+	_stagger_total = 1.4
+	_stagger_timer = 1.4
+	_shake = 0.5
+
+
+func get_held_parcel() -> Parcel:
+	return held_parcel
+
+
+## Отдаёт посылку получателю (пункт выдачи сам решает, куда её поставить).
+func hand_over_parcel() -> Parcel:
+	var p := held_parcel
+	held_parcel = null
+	instability = 0.0
+	return p
+
+
+func _die() -> void:
+	is_dead = true
+	_dead_timer = respawn_delay
+	is_sprinting = false
+	_shake = 0.4
+	sparks.global_position = global_position + Vector3.UP * BODY_HEIGHT
+	sparks.restart()
+	if held_parcel != null:
+		# Посылка остаётся там, где упала
+		_drop_parcel(Vector3(velocity.x, 1.5, velocity.z))
+	died.emit()
 
 
 ## Вызывается препятствиями (маятник, толкатель), когда они бьют дрона.
 func receive_hit(direction: Vector3, strength: float, contact: Vector3) -> void:
+	if is_dead or _invuln_timer > 0.0:
+		return
 	var spark_point := (global_position + Vector3.UP * BODY_HEIGHT).lerp(contact, 0.5)
-	_take_impact(direction, strength, spark_point, hazard_knockback)
+	_take_impact(direction, strength, spark_point, hazard_knockback, strength * hazard_damage)
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +463,12 @@ func _update_stamina(delta: float, has_input: bool, carrying: bool) -> void:
 		stamina = minf(stamina + stamina_regen * 0.5 * delta, stamina_max)
 		return
 
-	var wants_sprint := Input.is_action_pressed("sprint") and has_input and stamina > 0.0
+	# Бег — только при удержании Shift (короткое нажатие не считается)
+	if Input.is_action_pressed("sprint"):
+		_sprint_hold += delta
+	else:
+		_sprint_hold = 0.0
+	var wants_sprint := _sprint_hold >= sprint_hold_time and has_input and stamina > 0.0
 	if wants_sprint and not is_sprinting:
 		# Рывок на старте бега
 		_thruster_power = 4.0
@@ -342,6 +498,7 @@ func _update_stamina(delta: float, has_input: bool, carrying: bool) -> void:
 ## Короткий луч вниз: узнаём, на чём стоим, и берём его трение.
 func _update_surface_grip() -> void:
 	surface_grip = 1.0
+	_floor_collider = null
 	if not is_on_floor():
 		return
 	var query := PhysicsRayQueryParameters3D.create(
@@ -353,6 +510,7 @@ func _update_surface_grip() -> void:
 	if hit.is_empty():
 		return
 	var collider: Object = hit.get("collider")
+	_floor_collider = collider
 	var mat: PhysicsMaterial = null
 	if collider is StaticBody3D:
 		mat = (collider as StaticBody3D).physics_material_override
@@ -378,7 +536,10 @@ func _handle_collisions(pre_velocity: Vector3, delta: float) -> void:
 		var rb := col.get_collider() as RigidBody3D
 		if rb != null:
 			var push_dir := Vector3(-n.x, 0.0, -n.z).normalized()
-			var impulse := push_dir * (push_force * delta + maxf(into, 0.0) * minf(rb.mass, 5.0) * kick_strength)
+			var kick := 0.0
+			if into > hit_threshold:
+				kick = into * minf(rb.mass, 5.0) * kick_strength  # на бегу — пинок
+			var impulse := push_dir * (push_force * delta + kick)  # на шаге — мягко толкает
 			rb.apply_impulse(impulse, col.get_position() - rb.global_position)
 			into *= clampf(rb.mass / light_object_mass, 0.0, 1.0)
 		if into > strongest:
@@ -386,14 +547,16 @@ func _handle_collisions(pre_velocity: Vector3, delta: float) -> void:
 			hit_normal = n
 			hit_point = col.get_position()
 
-	if strongest > impact_threshold:
-		_take_impact(hit_normal, strongest, hit_point, wall_knockback)
+	if strongest > hit_threshold:
+		var dmg := (strongest - hit_threshold + 2.0) * wall_damage
+		_take_impact(hit_normal, strongest, hit_point, wall_knockback, dmg)
 
 
-func _take_impact(push_dir: Vector3, strength: float, contact: Vector3, knock_mult: float) -> void:
+func _take_impact(push_dir: Vector3, strength: float, contact: Vector3, knock_mult: float, health_damage: float) -> void:
 	if _hit_cooldown > 0.0:
 		return
 	_hit_cooldown = 0.3
+	_noise_burst += 1.2
 
 	# Отскок
 	push_dir.y = 0.0
@@ -410,6 +573,8 @@ func _take_impact(push_dir: Vector3, strength: float, contact: Vector3, knock_mu
 	body.scale = Vector3(1.2, 0.8, 1.2)
 	sparks.global_position = contact
 	sparks.restart()
+
+	take_damage(health_damage)
 
 	# Посылке достаётся
 	if held_parcel != null:
@@ -436,7 +601,7 @@ func _find_nearest_parcel() -> Parcel:
 
 
 func _try_pick_up() -> void:
-	if _pickup_cooldown > 0.0 or _stagger_timer > 0.0:
+	if _pickup_cooldown > 0.0 or _stagger_timer > 0.0 or is_dead:
 		return
 	var p := _find_nearest_parcel()
 	if p == null:
@@ -494,6 +659,9 @@ func _update_carry(delta: float, just_landed: bool, pre_move_velocity: Vector3) 
 	if _stagger_timer <= 0.0:
 		instability += accel_vec.length() * speed_over * turn_instability * delta
 
+	# 2б. Ветер раскачивает посылку
+	instability += _last_wind.length() * wind_instability * delta
+
 	# 3. Жёсткое приземление
 	if just_landed:
 		instability += maxf(0.0, -pre_move_velocity.y - safe_landing_speed) * landing_instability
@@ -547,6 +715,8 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 		lean = -0.3            # согнулся, отдыхивается
 	if staggered:
 		lean = 0.3             # откинуло назад
+	if is_dead:
+		lean = 0.2
 	body.rotation.x = lerpf(body.rotation.x, lean, 8.0 * delta)
 
 	# Шатание после удара (затухает)
@@ -554,7 +724,9 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 	if staggered:
 		var fade := _stagger_timer / _stagger_total
 		stagger_z = sin(_time * 28.0) * 0.45 * _stagger_strength * fade
-	body.rotation.z = lerpf(body.rotation.z, stagger_z, 20.0 * delta)
+	if is_dead:
+		stagger_z = 1.3        # завалился набок
+	body.rotation.z = lerpf(body.rotation.z, stagger_z, (6.0 if is_dead else 20.0) * delta)
 
 	# --- Ноги ---
 	var hip_l := 0.0
@@ -563,7 +735,13 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 	var knee_r := 0.0
 	var bob := 0.0
 
-	if not on_floor:
+	if is_dead:
+		knee_l = -1.2
+		knee_r = -1.2
+		hip_l = 0.6
+		hip_r = 0.6
+		bob = -0.35
+	elif not on_floor:
 		hip_l = 0.5
 		hip_r = -0.2
 		knee_l = -1.0
@@ -633,7 +811,24 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 	thruster_light.light_energy = _thruster_power * flicker
 	thruster_glow.scale = Vector3.ONE * (0.6 + _thruster_power * 0.15) * flicker
 	sprint_trail.emitting = running
-	steam.emitting = exhausted
+	steam.emitting = exhausted or is_dead
+
+	# Мигание при неуязвимости
+	visual.visible = not (_invuln_timer > 0.0 and fmod(_time, 0.2) < 0.07)
+
+
+func _update_noise(delta: float, has_input: bool) -> void:
+	var base := 0.0
+	var moving := is_on_floor() and Vector3(velocity.x, 0.0, velocity.z).length() > 0.5
+	if moving and has_input:
+		if is_sprinting:
+			base = run_noise
+		elif Input.is_action_pressed("quiet"):
+			base = quiet_noise
+		else:
+			base = walk_noise
+	_noise_burst = maxf(_noise_burst - delta * 1.5, 0.0)
+	noise = clampf(base + _noise_burst, 0.0, 2.0)
 
 
 func _update_hud() -> void:
@@ -664,3 +859,10 @@ func _update_hud() -> void:
 	else:
 		stamina_caption.text = "Выносливость"
 		stamina_bar.modulate = Color(1, 0.85, 0.35)
+
+	# Здоровье
+	var hp := health / max_health
+	health_bar.value = hp
+	health_bar.modulate = Color(1, 0.3, 0.25).lerp(Color(0.45, 1, 0.5), hp)
+	damage_flash.color.a = move_toward(damage_flash.color.a, 0.0, get_physics_process_delta_time() * 0.8)
+	death_label.visible = is_dead

@@ -1,0 +1,476 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/levels/level.gd" id="1_level"]
+[ext_resource type="Shader" path="res://shaders/prototype_grid.gdshader" id="2_grid"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/props/parcel.tscn" id="4_parcel"]
+[ext_resource type="PackedScene" path="res://scenes/props/barrel.tscn" id="5_barrel"]
+[ext_resource type="PackedScene" path="res://scenes/props/cone.tscn" id="6_cone"]
+[ext_resource type="PackedScene" path="res://scenes/obstacles/pendulum.tscn" id="7_pendulum"]
+[ext_resource type="PackedScene" path="res://scenes/obstacles/pusher.tscn" id="8_pusher"]
+[ext_resource type="PackedScene" path="res://scenes/obstacles/moving_platform.tscn" id="9_platform"]
+[ext_resource type="PackedScene" path="res://scenes/gameplay/delivery_zone.tscn" id="10_zone"]
+[ext_resource type="PackedScene" path="res://scenes/ui/results.tscn" id="11_results"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.3, 0.48, 0.78, 1)
+sky_horizon_color = Color(0.76, 0.83, 0.91, 1)
+ground_bottom_color = Color(0.2, 0.22, 0.26, 1)
+ground_horizon_color = Color(0.76, 0.83, 0.91, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 3
+ssao_enabled = true
+glow_enabled = true
+fog_enabled = true
+fog_light_color = Color(0.76, 0.83, 0.91, 1)
+fog_density = 0.006
+
+[sub_resource type="ShaderMaterial" id="Mat_grid"]
+shader = ExtResource("2_grid")
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+material = SubResource("Mat_grid")
+size = Vector3(30, 1, 186)
+
+[sub_resource type="BoxShape3D" id="Shape_floor"]
+size = Vector3(30, 1, 186)
+
+[sub_resource type="StandardMaterial3D" id="Mat_wall"]
+albedo_color = Color(0.5, 0.53, 0.6, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Mat_orange"]
+albedo_color = Color(0.93, 0.6, 0.38, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_teal"]
+albedo_color = Color(0.35, 0.68, 0.7, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="Mat_gray"]
+albedo_color = Color(0.55, 0.58, 0.64, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="Mat_roof"]
+albedo_color = Color(0.45, 0.25, 0.2, 1)
+roughness = 0.8
+
+[sub_resource type="PhysicsMaterial" id="Phys_ice"]
+friction = 0.04
+
+[sub_resource type="StandardMaterial3D" id="Mat_ice"]
+albedo_color = Color(0.72, 0.88, 0.98, 1)
+metallic = 0.1
+roughness = 0.05
+clearcoat_enabled = true
+
+[sub_resource type="BoxMesh" id="Mesh_ice"]
+material = SubResource("Mat_ice")
+size = Vector3(10, 0.1, 18)
+
+[sub_resource type="BoxShape3D" id="Shape_ice"]
+size = Vector3(10, 0.1, 18)
+
+[node name="Level01" type="Node3D"]
+script = ExtResource("1_level")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, 0.75, -0.433013, 0, 10, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -83)
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("Mesh_floor")
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("Shape_floor")
+
+[node name="Course" type="Node3D" parent="."]
+
+[node name="WallLeft" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0.8, -80.5)
+use_collision = true
+size = Vector3(0.4, 1.6, 181)
+material = SubResource("Mat_wall")
+
+[node name="WallRight" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0.8, -80.5)
+use_collision = true
+size = Vector3(0.4, 1.6, 181)
+material = SubResource("Mat_wall")
+
+[node name="WallBack" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 9.8)
+use_collision = true
+size = Vector3(10.8, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="WallEnd" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, -170.8)
+use_collision = true
+size = Vector3(10.8, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="NarrowLeft" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.95, 0.8, -110)
+use_collision = true
+size = Vector3(0.4, 1.6, 76)
+material = SubResource("Mat_wall")
+
+[node name="NarrowRight" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.95, 0.8, -110)
+use_collision = true
+size = Vector3(0.4, 1.6, 76)
+material = SubResource("Mat_wall")
+
+[node name="NarrowCapL1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.6, 0.8, -72.2)
+use_collision = true
+size = Vector3(1.0, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="NarrowCapR1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.6, 0.8, -72.2)
+use_collision = true
+size = Vector3(1.0, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="NarrowCapL2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.6, 0.8, -147.8)
+use_collision = true
+size = Vector3(1.0, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="NarrowCapR2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.6, 0.8, -147.8)
+use_collision = true
+size = Vector3(1.0, 1.6, 0.4)
+material = SubResource("Mat_wall")
+
+[node name="Pedestal" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, -3)
+use_collision = true
+size = Vector3(1.2, 0.8, 1.2)
+material = SubResource("Mat_teal")
+
+[node name="ShelfLeft" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6, 1, 6)
+use_collision = true
+size = Vector3(2, 2, 2.5)
+material = SubResource("Mat_orange")
+
+[node name="ShelfRight" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.6, 1, 6)
+use_collision = true
+size = Vector3(2, 2, 2.5)
+material = SubResource("Mat_orange")
+
+[node name="DepotRoof" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 6)
+use_collision = true
+size = Vector3(10.4, 0.3, 4)
+material = SubResource("Mat_roof")
+
+[node name="Step1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, -43)
+use_collision = true
+size = Vector3(10, 0.6, 2)
+material = SubResource("Mat_wall")
+
+[node name="Step2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -46)
+use_collision = true
+size = Vector3(10, 1.2, 4)
+material = SubResource("Mat_teal")
+
+[node name="IcePatch" type="StaticBody3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, -61)
+physics_material_override = SubResource("Phys_ice")
+
+[node name="Mesh" type="MeshInstance3D" parent="Course/IcePatch"]
+mesh = SubResource("Mesh_ice")
+
+[node name="Shape" type="CollisionShape3D" parent="Course/IcePatch"]
+shape = SubResource("Shape_ice")
+
+[node name="IcePost1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.6, -55)
+use_collision = true
+size = Vector3(0.6, 1.2, 0.6)
+material = SubResource("Mat_gray")
+
+[node name="IcePost2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.6, -59)
+use_collision = true
+size = Vector3(0.6, 1.2, 0.6)
+material = SubResource("Mat_gray")
+
+[node name="IcePost3" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.6, -63.5)
+use_collision = true
+size = Vector3(0.6, 1.2, 0.6)
+material = SubResource("Mat_gray")
+
+[node name="IcePost4" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0.6, -67)
+use_collision = true
+size = Vector3(0.6, 1.2, 0.6)
+material = SubResource("Mat_gray")
+
+[node name="UpStep1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -116.75)
+use_collision = true
+size = Vector3(7.5, 0.5, 1.5)
+material = SubResource("Mat_gray")
+
+[node name="UpStep2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -118.25)
+use_collision = true
+size = Vector3(7.5, 1.0, 1.5)
+material = SubResource("Mat_gray")
+
+[node name="LedgeA" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -122.5)
+use_collision = true
+size = Vector3(7.5, 1.5, 7)
+material = SubResource("Mat_orange")
+
+[node name="LedgeB" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, -138)
+use_collision = true
+size = Vector3(7.5, 1.5, 4)
+material = SubResource("Mat_orange")
+
+[node name="DownStep1" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, -140.75)
+use_collision = true
+size = Vector3(7.5, 1.0, 1.5)
+material = SubResource("Mat_gray")
+
+[node name="DownStep2" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, -142.25)
+use_collision = true
+size = Vector3(7.5, 0.5, 1.5)
+material = SubResource("Mat_gray")
+
+[node name="DitchStep" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 0.375, -126.75)
+use_collision = true
+size = Vector3(2.3, 0.75, 1.5)
+material = SubResource("Mat_teal")
+
+[node name="House" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -167.5)
+use_collision = true
+size = Vector3(8, 4, 5)
+material = SubResource("Mat_orange")
+
+[node name="HouseRoof" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, -167.5)
+use_collision = true
+size = Vector3(8.6, 0.4, 5.6)
+material = SubResource("Mat_roof")
+
+[node name="HouseDoor" type="CSGBox3D" parent="Course"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -164.95)
+use_collision = true
+size = Vector3(1.4, 2.2, 0.1)
+material = SubResource("Mat_roof")
+
+[node name="Hazards" type="Node3D" parent="."]
+
+[node name="Pendulum1" parent="Hazards" instance=ExtResource("7_pendulum")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -80)
+phase = 0.0
+
+[node name="Pendulum2" parent="Hazards" instance=ExtResource("7_pendulum")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -87)
+phase = 0.33
+
+[node name="Pendulum3" parent="Hazards" instance=ExtResource("7_pendulum")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -94)
+phase = 0.66
+
+[node name="Pusher1" parent="Hazards" instance=ExtResource("8_pusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 0.7, -104)
+travel = Vector3(5.2, 0, 0)
+phase = 0.0
+
+[node name="Pusher2" parent="Hazards" instance=ExtResource("8_pusher")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 0.7, -110)
+travel = Vector3(5.2, 0, 0)
+phase = 0.5
+
+[node name="Platform" parent="Hazards" instance=ExtResource("9_platform")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, -127.5)
+travel = Vector3(0, 0, -7)
+period = 6.0
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="Cone1" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.3, -12)
+
+[node name="Cone2" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.3, -15.5)
+
+[node name="Cone3" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.3, -19)
+
+[node name="Cone4" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.3, -22.5)
+
+[node name="Cone5" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.3, -26)
+
+[node name="Cone6" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0.3, -14)
+
+[node name="Cone7" parent="Props" instance=ExtResource("6_cone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0.3, -21)
+
+[node name="Barrel1" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.45, -32)
+
+[node name="Barrel2" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.45, -33.5)
+
+[node name="Barrel3" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -36)
+
+[node name="Barrel4" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0.45, -37.5)
+
+[node name="Barrel5" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0.45, -38.5)
+
+[node name="Barrel6" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.45, -39.5)
+
+[node name="Barrel7" parent="Props" instance=ExtResource("5_barrel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.45, -40.5)
+
+[node name="Signs" type="Node3D" parent="."]
+
+[node name="DepotSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.9, 6)
+billboard = 1
+text = "СКЛАД"
+font_size = 80
+outline_size = 16
+
+[node name="ConesSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, -10)
+billboard = 1
+text = "КОНУСЫ"
+font_size = 64
+outline_size = 16
+
+[node name="BarrelsSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, -30)
+billboard = 1
+text = "БОЧКИ И СТУПЕНИ"
+font_size = 64
+outline_size = 16
+
+[node name="IceSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, -51)
+billboard = 1
+text = "ЛЁД"
+font_size = 64
+outline_size = 16
+
+[node name="PendulumSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.5, -76)
+billboard = 1
+text = "МАЯТНИКИ"
+font_size = 64
+outline_size = 16
+
+[node name="PusherSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.0, -100)
+billboard = 1
+text = "ТОЛКАТЕЛИ"
+font_size = 64
+outline_size = 16
+
+[node name="PlatformSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.5, -120)
+billboard = 1
+text = "ПЛАТФОРМА"
+font_size = 64
+outline_size = 16
+
+[node name="HouseSign" type="Label3D" parent="Signs"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5.2, -165)
+billboard = 1
+text = "ПОЛУЧАТЕЛЬ"
+font_size = 80
+outline_size = 16
+
+[node name="OrderParcel" parent="." instance=ExtResource("4_parcel")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, -3)
+display_name = "Сервиз"
+base_price = 500
+fragility = 1.3
+
+[node name="DeliveryZone" parent="." instance=ExtResource("10_zone")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -158)
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 3)
+
+[node name="LevelHUD" type="CanvasLayer" parent="."]
+
+[node name="Top" type="VBoxContainer" parent="LevelHUD"]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -320.0
+offset_top = 14.0
+offset_right = 320.0
+offset_bottom = 80.0
+grow_horizontal = 2
+
+[node name="Objective" type="Label" parent="LevelHUD/Top"]
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
+
+[node name="Info" type="Label" parent="LevelHUD/Top"]
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 6
+horizontal_alignment = 1
+
+[node name="Controls" type="Label" parent="LevelHUD"]
+modulate = Color(1, 1, 1, 0.7)
+offset_left = 14.0
+offset_top = 12.0
+offset_right = 380.0
+offset_bottom = 120.0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 13
+text = "WASD — движение     Мышь — камера
+Пробел — прыжок     Shift (держать) — бег
+E — взять / положить     Q — бросить
+Esc — отпустить мышь"
+
+[node name="Results" parent="." instance=ExtResource("11_results")]

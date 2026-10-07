@@ -9,11 +9,12 @@ signal broken
 @export var display_name := "Посылка"
 @export var base_price := 250          ## Цена целой посылки (кредиты)
 @export var fragility := 1.0           ## Хрупкость: 2.0 — теряет вдвое больше от ударов
-@export var safe_impact_speed := 4.5   ## Удары слабее этого (м/с) не портят посылку
+@export var safe_impact_speed := 5.5   ## Удары слабее этого (м/с) не портят посылку
 
 const DAMAGE_PER_MS := 8.0             ## % цены за каждый м/с удара сверх порога
 
 var price := 0
+var hit_count := 0            ## Сколько раз посылку повредили
 var is_held := false
 
 var _prev_velocity := Vector3.ZERO
@@ -54,6 +55,7 @@ func take_damage(percent: float) -> void:
 		return
 	loss = mini(loss, price)
 	price -= loss
+	hit_count += 1
 	_update_label()
 	_spawn_popup("-%d кр" % loss, Color(1, 0.35, 0.3))
 	price_changed.emit(price)
