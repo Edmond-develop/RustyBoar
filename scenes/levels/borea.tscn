@@ -1,4 +1,7 @@
 [gd_scene format=3]
+[ext_resource type="Script" path="res://scenes/world/ice_river.gd" id="20_river"]
+[ext_resource type="Shader" path="res://shaders/ice_surface.gdshader" id="21_iceshader"]
+[ext_resource type="Shader" path="res://shaders/water.gdshader" id="22_water"]
 
 [ext_resource type="Script" path="res://scenes/levels/level.gd" id="1_level"]
 [ext_resource type="Script" path="res://scenes/world/terrain.gd" id="2_terrain"]
@@ -42,7 +45,7 @@ glow_intensity = 0.9
 glow_bloom = 0.05
 fog_enabled = true
 fog_light_color = Color(0.8, 0.86, 0.94, 1)
-fog_density = 0.004
+fog_density = 0.0065
 fog_sky_affect = 0.6
 
 [sub_resource type="ShaderMaterial" id="Mat_terrain"]
@@ -118,17 +121,25 @@ size = Vector3(56, 0.4, 52)
 size = Vector3(56, 0.4, 52)
 
 [sub_resource type="BoxShape3D" id="Shape_banner"]
-size = Vector3(150, 40, 3)
+size = Vector3(340, 40, 3)
 
 [sub_resource type="BoxShape3D" id="Shape_shelter"]
 size = Vector3(3.2, 3.0, 5.0)
 
+[sub_resource type="ShaderMaterial" id="Mat_river_ice"]
+render_priority = 0
+shader = ExtResource("21_iceshader")
+
+[sub_resource type="ShaderMaterial" id="Mat_river_water"]
+render_priority = -1
+shader = ExtResource("22_water")
+
 [node name="Borea" type="Node3D"]
 script = ExtResource("1_level")
-fast_time = 180.0
-tip_deadline = 420.0
+fast_time = 240.0
+tip_deadline = 540.0
 ambient_snow = true
-spawn_point = Vector3(0, 1, 150)
+spawn_point = Vector3(0, 1, 330)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")
@@ -147,351 +158,92 @@ terrain_material = SubResource("Mat_terrain")
 [node name="Camp" type="Node3D" parent="."]
 
 [node name="ShipHull" type="CSGBox3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 152)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 332)
 use_collision = true
 size = Vector3(5, 2.4, 10)
 material = SubResource("Mat_white")
 
 [node name="ShipCockpit" type="CSGSphere3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.6, 146.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.6, 326.6)
 use_collision = true
 radius = 1.8
 material = SubResource("Mat_teal")
 
 [node name="ShipStripe" type="CSGBox3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 152)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 332)
 size = Vector3(5.1, 0.5, 10.1)
 material = SubResource("Mat_orange")
 
 [node name="ShipEngine" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 157.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 337.3)
 radius = 1.0
 height = 0.6
 material = SubResource("Mat_engine")
 
 [node name="ShipLeg1" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 149)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 329)
 use_collision = true
 radius = 0.2
 height = 1.6
 material = SubResource("Mat_metal")
 
 [node name="ShipLeg2" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 149)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 329)
 use_collision = true
 radius = 0.2
 height = 1.6
 material = SubResource("Mat_metal")
 
 [node name="ShipLeg3" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 155)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 335)
 use_collision = true
 radius = 0.2
 height = 1.6
 material = SubResource("Mat_metal")
 
 [node name="ShipLeg4" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 155)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 335)
 use_collision = true
 radius = 0.2
 height = 1.6
 material = SubResource("Mat_metal")
 
 [node name="Pedestal" type="CSGBox3D" parent="Camp" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 141)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 321)
 use_collision = true
 size = Vector3(1.2, 0.8, 1.2)
 material = SubResource("Mat_teal")
 
 [node name="Barrel1" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.6, 150)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.6, 330)
 
 [node name="Barrel2" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.6, 150)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.6, 330)
 
 [node name="Barrel3" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0.6, 151)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0.6, 331)
 
 [node name="Barrel4" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.6, 144)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.6, 324)
 
 [node name="CampLight" type="OmniLight3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 143)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 323)
 light_color = Color(1, 0.8, 0.55, 1)
 light_energy = 1.5
 omni_range = 10.0
 
 [node name="CampSign" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 146)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 326)
 billboard = 1
 text = "ЛАГЕРЬ  RUSTY BOAR"
 font_size = 72
 outline_size = 16
 
 [node name="CampHint" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 135)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 315)
 billboard = 1
-text = "Станция «Борея-7» — 350 м на север"
+text = "Станция «Борея-7» — 520 м на север"
 font_size = 44
-outline_size = 16
-
-[node name="ZoneA_IceField" type="Node3D" parent="."]
-
-[node name="IceField" type="StaticBody3D" parent="ZoneA_IceField" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0, 105)
-physics_material_override = SubResource("Phys_ice")
-
-[node name="Mesh" type="MeshInstance3D" parent="ZoneA_IceField/IceField"]
-mesh = SubResource("Mesh_ice_field")
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneA_IceField/IceField"]
-shape = SubResource("Shape_ice_field")
-
-[node name="Trap1" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.976, 0.2, 88)
-script = ExtResource("9_trap")
-phase = 0.89
-
-[node name="Trap2" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.325, 0.2, 95)
-script = ExtResource("9_trap")
-phase = 0.09
-
-[node name="Trap3" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.575, 0.2, 102)
-script = ExtResource("9_trap")
-phase = 0.42
-
-[node name="Trap4" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.938, 0.2, 109)
-script = ExtResource("9_trap")
-phase = 0.03
-
-[node name="Trap5" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.655, 0.2, 116)
-script = ExtResource("9_trap")
-phase = 0.22
-
-[node name="Trap6" type="Node3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.237, 0.2, 123)
-script = ExtResource("9_trap")
-phase = 0.51
-
-[node name="Spikes1" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.985, 0.2, 83.585)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 1.96
-
-[node name="Spikes2" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.811, 0.2, 83.575)
-script = ExtResource("8_spikes")
-spike_count = 6
-max_height = 1.63
-
-[node name="Spikes3" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.799, 0.2, 84.597)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 2.27
-
-[node name="Spikes4" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.73, 0.2, 83.684)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.65
-
-[node name="Spikes5" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.701, 0.2, 84.532)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.7
-
-[node name="Spikes6" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.293, 0.2, 83.452)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.63
-
-[node name="Spikes7" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.115, 0.2, 88.784)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 1.42
-
-[node name="Spikes8" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.404, 0.2, 87.625)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.48
-
-[node name="Spikes9" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.796, 0.2, 87.283)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.34
-
-[node name="Spikes10" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.475, 0.2, 91.936)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.73
-
-[node name="Spikes11" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.702, 0.2, 91.865)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.74
-
-[node name="Spikes12" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.472, 0.2, 93.096)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.42
-
-[node name="Spikes13" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.427, 0.2, 98.463)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.49
-
-[node name="Spikes14" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.639, 0.2, 97.783)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 2.01
-
-[node name="Spikes15" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.862, 0.2, 97.0)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 1.82
-
-[node name="Spikes16" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.483, 0.2, 98.662)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.99
-
-[node name="Spikes17" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.454, 0.2, 101.015)
-script = ExtResource("8_spikes")
-spike_count = 4
-max_height = 1.66
-
-[node name="Spikes18" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.421, 0.2, 102.23)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 2.25
-
-[node name="Spikes19" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.799, 0.2, 101.195)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.92
-
-[node name="Spikes20" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.56, 0.2, 105.847)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 2.02
-
-[node name="Spikes21" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.134, 0.2, 106.297)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.81
-
-[node name="Spikes22" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.94, 0.2, 106.631)
-script = ExtResource("8_spikes")
-spike_count = 6
-max_height = 1.63
-
-[node name="Spikes23" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.109, 0.2, 107.407)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.85
-
-[node name="Spikes24" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.855, 0.2, 111.568)
-script = ExtResource("8_spikes")
-spike_count = 4
-max_height = 1.72
-
-[node name="Spikes25" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.89, 0.2, 111.645)
-script = ExtResource("8_spikes")
-spike_count = 6
-max_height = 1.98
-
-[node name="Spikes26" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.109, 0.2, 112.198)
-script = ExtResource("8_spikes")
-spike_count = 4
-max_height = 1.92
-
-[node name="Spikes27" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.71, 0.2, 114.39)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.71
-
-[node name="Spikes28" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.267, 0.2, 115.9)
-script = ExtResource("8_spikes")
-spike_count = 3
-max_height = 1.6
-
-[node name="Spikes29" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.227, 0.2, 120.566)
-script = ExtResource("8_spikes")
-spike_count = 4
-max_height = 1.73
-
-[node name="Spikes30" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.446, 0.2, 120.9)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.91
-
-[node name="Spikes31" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.199, 0.2, 119.419)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.76
-
-[node name="Spikes32" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.795, 0.2, 120.356)
-script = ExtResource("8_spikes")
-spike_count = 6
-max_height = 1.98
-
-[node name="Spikes33" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.627, 0.2, 120.134)
-script = ExtResource("8_spikes")
-spike_count = 7
-max_height = 1.77
-
-[node name="Spikes34" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16.715, 0.2, 119.085)
-script = ExtResource("8_spikes")
-spike_count = 4
-max_height = 1.96
-
-[node name="Spikes35" type="StaticBody3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.736, 0.2, 125.115)
-script = ExtResource("8_spikes")
-spike_count = 5
-max_height = 1.82
-
-[node name="IceHint" type="Label3D" parent="ZoneA_IceField"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 131)
-billboard = 1
-text = "Напрямик — шипы и ловушки.  По краям — дольше, но спокойнее"
-font_size = 40
 outline_size = 16
 
 [node name="ZoneB_Avalanche" type="Node3D" parent="."]
@@ -1167,10 +919,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -199)
 [node name="ZoneBanners" type="Node3D" parent="."]
 
 [node name="Banner1" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 132)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 314)
 script = ExtResource("16_banner")
-title = "Ледяное поле"
-subtitle = "Скользко и остро. Шипы ранят, ловушки бьют снизу"
+title = "Замёрзшая река"
+subtitle = "Сначала покатайся по льду — дальше будет сложнее"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner1"]
 shape = SubResource("Shape_banner")
@@ -1229,25 +981,77 @@ subtitle = "Пункт выдачи прямо перед тобой"
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner7"]
 shape = SubResource("Shape_banner")
 
+[node name="ZoneA_IceRiver" type="Node3D" parent="."]
+
+[node name="IceRiver" type="StaticBody3D" parent="ZoneA_IceRiver"]
+script = ExtResource("20_river")
+ice_material = SubResource("Mat_river_ice")
+water_material = SubResource("Mat_river_water")
+
+[node name="RiverBanner1" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 286)
+script = ExtResource("16_banner")
+title = "Торосы"
+subtitle = "Скользкие гряды льда и первый спуск. Не разгоняйся слишком сильно"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner1"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner2" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 241)
+script = ExtResource("16_banner")
+title = "Полыньи"
+subtitle = "Тонкий лёд трещит, перешейки, разводье с льдинами"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner2"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner3" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 203)
+script = ExtResource("16_banner")
+title = "Ледяные холмы"
+subtitle = "С вершин срываются глыбы — идите ложбинами и смотрите вверх"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner3"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner4" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 156)
+script = ExtResource("16_banner")
+title = "Гейзеры и ветер"
+subtitle = "Пар над конусом — гейзер скоро ударит. Ветер сносит к полыньям"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner4"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner5" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 127)
+script = ExtResource("16_banner")
+title = "Последний рубеж"
+subtitle = "Разгонись на трамплине или лови льдину"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner5"]
+shape = SubResource("Shape_banner")
+
 [node name="OrderParcel" parent="." instance=ExtResource("5_parcel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 141)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 321)
 display_name = "Медикаменты"
 base_price = 800
 fragility = 1.2
 
 [node name="HeavyCargo1" parent="." instance=ExtResource("18_heavy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.5, 141)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.5, 321)
 display_name = "Генератор"
 base_price = 600
 
 [node name="HeavyCargo2" parent="." instance=ExtResource("18_heavy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 141)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 321)
 display_name = "Буровая головка"
 base_price = 450
 fragility = 0.3
 
 [node name="CargoSign" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 139)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 319)
 billboard = 1
 text = "Тяжёлые грузы — бонус. Нести вдвоём"
 font_size = 36

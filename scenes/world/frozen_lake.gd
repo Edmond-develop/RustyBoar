@@ -228,7 +228,9 @@ func _restore_tile(key: Vector2i) -> void:
 
 
 func _on_water_entered(body: Node3D) -> void:
-	if body.has_method("kill"):
+	if body is Parcel:
+		(body as Parcel).server_return_to_path()
+	elif body.has_method("kill"):
 		body.kill("ДРОН ПРОВАЛИЛСЯ ПОД ЛЁД")
 
 

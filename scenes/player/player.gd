@@ -22,6 +22,7 @@ signal landed(fall_speed: float)
 @export var air_control := 0.35
 @export var turn_speed := 12.0
 @export var min_grip := 0.06
+@export var ice_slide := 1.0           ## Как сильно ледяной склон тянет вниз
 
 @export_group("Выносливость")
 @export var sprint_hold_time := 0.12
@@ -377,6 +378,12 @@ func _physics_process(delta: float) -> void:
 	velocity.x = horizontal.x
 	velocity.z = horizontal.z
 
+	# На скользком склоне дрон съезжает вниз (и разгоняется на ледяных спусках)
+	if on_floor and surface_grip < 0.5:
+		var n := get_floor_normal()
+		velocity.x += n.x * 9.8 * ice_slide * delta
+		velocity.z += n.z * 9.8 * ice_slide * delta
+
 	# --- Движение и столкновения ---
 	var pre_move_velocity := velocity
 	move_and_slide()
@@ -570,6 +577,25 @@ func kill(reason: String = "") -> void:
 	if reason != "":
 		death_label.text = reason + "\nВозвращаемся в лагерь..."
 	_die()
+
+
+## Подбросить вверх (трамплин, гейзер). Можно добавить урон и раскачку посылки.
+func launch(up_speed: float, damage: float = 0.0, parcel_shake: float = 0.0, parcel_damage: float = 0.0) -> void:
+	if not is_local or is_dead:
+		return
+	velocity.y = maxf(velocity.y, up_speed)
+	_coyote_timer = 0.0
+	_thruster_power = 5.0
+	_noise_burst += 0.6
+	body.scale = Vector3(0.85, 1.15, 0.85)
+	if damage > 0.0:
+		take_damage(damage)
+		_shake = maxf(_shake, 0.2)
+	if held_parcel != null:
+		if parcel_shake > 0.0 and _carry_mode() != 2:
+			instability += parcel_shake
+		if parcel_damage > 0.0:
+			held_parcel.take_damage(parcel_damage)
 
 
 func apply_wind(wind_velocity: Vector3) -> void:

@@ -22,7 +22,7 @@ signal holders_changed
 @export var drag_speed := 1.8           ## Скорость волочения одним курьером
 @export var max_carry_distance := 3.4   ## Тяжёлый груз падает, если носильщики разошлись дальше
 @export var label_height := 0.6
-@export var lost_y := -5.0              ## Упала ниже — возвращается на тропу
+@export var lost_y := -12.0             ## Упала ниже (в пропасть) — возвращается на тропу
 
 const DAMAGE_PER_MS := 8.0
 
@@ -200,7 +200,13 @@ func _track_safe_position(delta: float) -> void:
 
 
 func _check_lost() -> void:
-	if global_position.y > lost_y:
+	if global_position.y <= lost_y:
+		server_return_to_path()
+
+
+## Хост: вернуть посылку на последнее надёжное место (упала в воду, в пропасть)
+func server_return_to_path() -> void:
+	if not multiplayer.is_server() or is_carried() or is_delivered:
 		return
 	var xform := _start_xform
 	if _has_safe_pos:

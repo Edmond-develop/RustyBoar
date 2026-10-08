@@ -4,7 +4,8 @@ extends StaticBody3D
 ## Высота в каждой точке = лёгкий шум + специально спланированные участки.
 ## Тропа идёт с юга (z = +150, лагерь) на север (z = -200, станция) вдоль x ≈ 0.
 ##
-##   z  132 … 78   Ледяное поле (ровно)
+##   z  345 … 315  Лагерь
+##   z  312 … 80   Огромное замёрзшее озеро на всю ширину (лёд, полыньи, спуски)
 ##   z   72 … 8    Лавинный склон (гора на западе)
 ##   z   -2 … -40  Трещины (две пропасти поперёк пути)
 ##   z  -42 … -106 Плато бурь (обрывы по бокам)
@@ -13,16 +14,17 @@ extends StaticBody3D
 ##
 ## Чтобы поменять форму мира — правь функцию height_at().
 
-@export var size_x := 240.0
-@export var size_z := 380.0
+@export var size_x := 360.0
+@export var size_z := 570.0
 @export var north_edge_z := -215.0
-@export var cell := 1.0
+@export var cell := 1.5
 @export var noise_seed := 7
 @export var terrain_material: Material
 
 ## Трещины: (центр по z, полуширина)
 const CREVASSES := [Vector2(-12.0, 3.0), Vector2(-30.0, 3.5)]
 const CREVASSE_DEPTH := -30.0
+const RIVER_HALF := 150.0  ## Полуширина замёрзшего озера (как в ice_river.gd)
 const LAKE_CENTER := Vector2(0.0, -175.0)
 const LAKE_RADIUS := Vector2(24.0, 17.0)
 
@@ -50,9 +52,15 @@ func height_at(x: float, z: float) -> float:
 	h *= lerpf(1.0, 0.2, 1.0 - smoothstep(5.0, 16.0, ax))
 	h += maxf(_big_noise.get_noise_2d(x, z), 0.0) * 10.0 * smoothstep(20.0, 45.0, ax)
 
-	# Ледяное поле — ровная площадка
-	var wa := _band(z, 132.0, 78.0, 6.0) * (1.0 - smoothstep(30.0, 40.0, ax))
-	h = lerpf(h, 0.0, wa)
+	# Замёрзшее озеро: дно подо льдом и пологие берега далеко по краям
+	var wr := _band(z, 314.0, 80.0, 6.0)
+	if wr > 0.0:
+		var ry := IceRiver.river_y(z)
+		var water := _band(z, 312.0, 92.0, 0.5)
+		var inside := 1.0 - smoothstep(RIVER_HALF - 1.0, RIVER_HALF + 1.0, ax)
+		var bed := ry - 6.0 * water
+		var shore := ry + clampf((ax - RIVER_HALF) * 0.35, 0.0, 6.0)
+		h = lerpf(h, lerpf(shore, bed, inside), wr)
 
 	# Лавинный склон — гора к западу от тропы
 	var wb := _band(z, 72.0, 8.0, 10.0)
@@ -86,8 +94,9 @@ func height_at(x: float, z: float) -> float:
 	h = lerpf(h, -6.0, 1.0 - smoothstep(0.98, 1.08, d))
 
 	# Горы по краям мира (слишком крутые, чтобы забраться)
-	var edge := clampf((ax - 70.0) * 1.5, 0.0, 45.0)
-	edge += clampf((z - 152.0) * 1.5, 0.0, 45.0)
+	var edge_start := lerpf(70.0, RIVER_HALF + 12.0, _band(z, 318.0, 84.0, 8.0))
+	var edge := clampf((ax - edge_start) * 1.5, 0.0, 45.0)
+	edge += clampf((z - 342.0) * 1.5, 0.0, 45.0)
 	edge += clampf((north_edge_z + 7.0 - z) * 1.5, 0.0, 45.0)
 	h += edge + edge * 0.15 * _big_noise.get_noise_2d(z * 2.0, x * 2.0)
 	return h

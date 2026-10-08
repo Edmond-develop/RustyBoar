@@ -23,11 +23,17 @@ var level_scene := "res://scenes/levels/borea.tscn"
 var players := {}            ## peer_id -> {"name": String, "color": int}
 var local_name := "Курьер"
 var in_game := false         ## Уровень загружен у всех — можно рассылать состояние
+var game_time := 0.0         ## Общее время с начала уровня (для гейзеров, глыб, льдин)
 var game_running := false    ## Идёт игра (новых игроков не пускаем)
 var local_player: Node = null
 var last_message := ""       ## Сообщение для меню (например, «хост отключился»)
 
 var _ready_peers: Array = []
+
+
+func _process(delta: float) -> void:
+	if in_game:
+		game_time += delta
 
 
 func _ready() -> void:
@@ -154,6 +160,7 @@ func _check_all_ready() -> void:
 @rpc("authority", "call_local", "reliable")
 func _all_ready() -> void:
 	in_game = true
+	game_time = 0.0
 	game_started.emit()
 
 
