@@ -9,6 +9,9 @@ extends Node3D
 ## Перед лавиной 2.5 секунды гул, тряска и снежная пыль сверху.
 ## Спастись можно, убежав вдоль тропы или спрятавшись в укрытии под скалой
 ## (зоны из группы "avalanche_shelter").
+##
+## По сети: напряжение снега (от шума ВСЕХ дронов) считает хост и сам запускает
+## лавину у всех. Дальше каждый компьютер проверяет попадание по своему дрону.
 
 @export_group("Зона склона")
 @export var zone_z_max := 72.0
@@ -41,7 +44,8 @@ var _front_x := 0.0
 var _center_z := 0.0
 var _hit_done := false
 var _pushed: Array = []
-var _player: Node3D
+var _player: Node3D      ## Свой дрон
+var _sync_timer := 0.0
 var _terrain: Node
 
 var _front: Node3D
@@ -64,35 +68,27 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_time += delta
-	if _player == null:
-		_player = get_tree().get_first_node_in_group("player")
-		if _player == null:
-			return
-
-	var p := _player.global_position
-	var inside := p.z < zone_z_max and p.z > zone_z_min and p.x > zone_x_min and p.x < zone_x_max
+	_player = Network.local_player
+	var inside := _player != null and _in_zone(_player.global_position)
 
 	match state:
 		State.CALM:
-			if inside and not _player.is_dead:
-				tension += _player.get_noise() * noise_sensitivity * delta
-			tension = maxf(tension - tension_decay * delta, 0.0)
-			if inside and not _scripted_done and p.z < script_trigger_z:
-				_scripted_done = true
-				_start_warning(p.z)
-			elif tension >= 1.0:
-				_start_warning(p.z)
+			if multiplayer.is_server():
+				_server_calm(delta)
 		State.WARNING:
 			_timer -= delta
-			_player.add_shake(0.03 + 0.08 * (1.0 - _timer / warning_time))
+			if _player:
+				_player.add_shake(0.03 + 0.08 * (1.0 - _timer / warning_time))
 			if _timer <= 0.0:
 				_start_slide()
 		State.SLIDING:
 			_front_x += speed * delta
 			_update_front()
 			_check_hits()
-			var dist := absf(p.x - _front_x) + absf(p.z - _center_z) * 0.5
-			_player.add_shake(clampf(0.3 - dist / 150.0, 0.03, 0.3))
+			if _player:
+				var p := _player.global_position
+				var dist := absf(p.x - _front_x) + absf(p.z - _center_z) * 0.5
+				_player.add_shake(clampf(0.3 - dist / 150.0, 0.03, 0.3))
 			if _front_x > end_x:
 				_finish()
 		State.COOLDOWN:
@@ -103,6 +99,46 @@ func _physics_process(delta: float) -> void:
 	_update_hud(inside)
 
 
+func _in_zone(p: Vector3) -> bool:
+	return p.z < zone_z_max and p.z > zone_z_min and p.x > zone_x_min and p.x < zone_x_max
+
+
+## Хост: копим напряжение от шума всех дронов на склоне
+func _server_calm(delta: float) -> void:
+	var trigger_z := INF
+	for d in get_tree().get_nodes_in_group("player"):
+		var dp: Vector3 = d.global_position
+		if not _in_zone(dp) or d.is_dead:
+			continue
+		tension += d.get_noise() * noise_sensitivity * delta
+		if not _scripted_done and dp.z < script_trigger_z:
+			_scripted_done = true
+			trigger_z = dp.z
+	tension = maxf(tension - tension_decay * delta, 0.0)
+
+	if trigger_z == INF and tension >= 1.0:
+		# Лавина сходит туда, где самый шумный дрон
+		var loudest := -1.0
+		for d in get_tree().get_nodes_in_group("player"):
+			if _in_zone(d.global_position) and d.get_noise() > loudest:
+				loudest = d.get_noise()
+				trigger_z = d.global_position.z
+	if trigger_z != INF:
+		_start_warning.rpc(trigger_z)
+		return
+
+	_sync_timer -= delta
+	if _sync_timer <= 0.0 and Network.in_game and Network.is_online():
+		_sync_timer = 0.2
+		_sync_tension.rpc(tension)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func _sync_tension(value: float) -> void:
+	tension = value
+
+
+@rpc("authority", "call_local", "reliable")
 func _start_warning(player_z: float) -> void:
 	state = State.WARNING
 	_timer = warning_time
@@ -122,6 +158,7 @@ func _start_slide() -> void:
 
 
 func _finish() -> void:
+	_scripted_done = true
 	state = State.COOLDOWN
 	_timer = cooldown
 	tension = 0.0
@@ -141,8 +178,8 @@ func _update_front() -> void:
 
 
 func _check_hits() -> void:
-	# Дрон
-	if not _hit_done and not _player.is_dead:
+	# Свой дрон
+	if _player and not _hit_done and not _player.is_dead:
 		var p := _player.global_position
 		var in_width := absf(p.z - _center_z) < width * 0.5 + 1.0
 		var in_front := p.x < _front_x + 2.5 and p.x > _front_x - 8.0
@@ -150,7 +187,9 @@ func _check_hits() -> void:
 			_hit_done = true
 			_player.receive_avalanche(Vector3.RIGHT)
 
-	# Посылки на земле — уносит
+	# Посылки на земле — уносит (физику посылок считает хост)
+	if not multiplayer.is_server():
+		return
 	for node in get_tree().get_nodes_in_group("parcel"):
 		var parcel := node as Parcel
 		if parcel == null or parcel.is_held or _pushed.has(parcel):

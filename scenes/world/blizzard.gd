@@ -59,10 +59,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Метель у каждого своя: туман, снег и ветер — только для своего дрона
+	_player = Network.local_player
 	if _player == null:
-		_player = get_tree().get_first_node_in_group("player")
-		if _player == null:
-			return
+		return
 
 	var p := _player.global_position
 	var inside := p.z < zone_z_max and p.z > zone_z_min and absf(p.x) < zone_half_width

@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scenes/props/parcel.gd" id="1_parcel"]
+
+[sub_resource type="BoxShape3D" id="Shape_crate"]
+size = Vector3(1.4, 0.8, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="Mat_crate"]
+albedo_color = Color(0.28, 0.3, 0.34, 1)
+metallic = 0.7
+roughness = 0.4
+
+[sub_resource type="BoxMesh" id="Mesh_crate"]
+material = SubResource("Mat_crate")
+size = Vector3(1.4, 0.8, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="Mat_stripe"]
+albedo_color = Color(1, 0.75, 0.15, 1)
+roughness = 0.5
+
+[sub_resource type="BoxMesh" id="Mesh_stripe"]
+material = SubResource("Mat_stripe")
+size = Vector3(0.14, 0.82, 0.82)
+
+[sub_resource type="BoxMesh" id="Mesh_handle"]
+material = SubResource("Mat_crate")
+size = Vector3(0.12, 0.12, 0.5)
+
+[node name="HeavyParcel" type="RigidBody3D"]
+mass = 12.0
+script = ExtResource("1_parcel")
+display_name = "Тяжёлый груз"
+base_price = 600
+fragility = 0.5
+required_carriers = 2
+label_height = 0.9
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Shape_crate")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("Mesh_crate")
+
+[node name="StripeLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.45, 0, 0)
+mesh = SubResource("Mesh_stripe")
+
+[node name="StripeRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0, 0)
+mesh = SubResource("Mesh_stripe")
+
+[node name="HandleLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.76, 0.1, 0)
+mesh = SubResource("Mesh_handle")
+
+[node name="HandleRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.76, 0.1, 0)
+mesh = SubResource("Mesh_handle")
+
+[node name="ValueLabel" type="Label3D" parent="."]
+billboard = 1
+text = "Тяжёлый груз"
+font_size = 34
+outline_size = 10

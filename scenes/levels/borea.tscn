@@ -3,7 +3,6 @@
 [ext_resource type="Script" path="res://scenes/levels/level.gd" id="1_level"]
 [ext_resource type="Script" path="res://scenes/world/terrain.gd" id="2_terrain"]
 [ext_resource type="Shader" path="res://shaders/snow_terrain.gdshader" id="3_snow"]
-[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="4_player"]
 [ext_resource type="PackedScene" path="res://scenes/props/parcel.tscn" id="5_parcel"]
 [ext_resource type="PackedScene" path="res://scenes/gameplay/delivery_zone.tscn" id="6_zone"]
 [ext_resource type="PackedScene" path="res://scenes/ui/results.tscn" id="7_results"]
@@ -17,6 +16,7 @@
 [ext_resource type="Script" path="res://scenes/world/frozen_lake.gd" id="15_lake"]
 [ext_resource type="Script" path="res://scenes/world/zone_banner.gd" id="16_banner"]
 [ext_resource type="PackedScene" path="res://scenes/props/barrel.tscn" id="17_barrel"]
+[ext_resource type="PackedScene" path="res://scenes/props/heavy_parcel.tscn" id="18_heavy"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.36, 0.53, 0.8, 1)
@@ -128,6 +128,7 @@ script = ExtResource("1_level")
 fast_time = 180.0
 tip_deadline = 420.0
 ambient_snow = true
+spawn_point = Vector3(0, 1, 150)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")
@@ -1234,8 +1235,23 @@ display_name = "Медикаменты"
 base_price = 800
 fragility = 1.2
 
-[node name="Player" parent="." instance=ExtResource("4_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 150)
+[node name="HeavyCargo1" parent="." instance=ExtResource("18_heavy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.5, 141)
+display_name = "Генератор"
+base_price = 600
+
+[node name="HeavyCargo2" parent="." instance=ExtResource("18_heavy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 141)
+display_name = "Буровая головка"
+base_price = 450
+fragility = 0.3
+
+[node name="CargoSign" type="Label3D" parent="Camp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 139)
+billboard = 1
+text = "Тяжёлые грузы — бонус. Нести вдвоём"
+font_size = 36
+outline_size = 12
 
 [node name="LevelHUD" type="CanvasLayer" parent="."]
 

@@ -2,6 +2,7 @@ extends Node3D
 ## Сосулька на потолке пещеры. Когда дрон подходит близко (или шумит неподалёку),
 ## она дрожит и падает. Попадание ранит дрона. Через время отрастает снова.
 ## Узел ставится в точку потолка, остриё смотрит вниз.
+## По сети: когда падать, решает хост; попадание проверяет каждый игрок по своему дрону.
 
 @export var floor_y := 0.0               ## Высота пола под сосулькой
 @export var length := 1.6
@@ -50,20 +51,21 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _player == null:
-		_player = get_tree().get_first_node_in_group("player")
-		if _player == null:
-			return
-
-	var p := _player.global_position
-	var flat_dist := Vector2(p.x - global_position.x, p.z - global_position.z).length()
+	_player = Network.local_player
 
 	match state:
 		State.HANGING:
-			var r := noisy_trigger_radius if _player.get_noise() > 0.6 else trigger_radius
-			if flat_dist < r and not _player.is_dead:
-				state = State.SHAKING
-				_timer = 0.7
+			# Решает хост: кто-то из дронов подошёл близко или шумит неподалёку
+			if multiplayer.is_server():
+				for d in get_tree().get_nodes_in_group("player"):
+					if d.is_dead:
+						continue
+					var dp: Vector3 = d.global_position
+					var dist := Vector2(dp.x - global_position.x, dp.z - global_position.z).length()
+					var r := noisy_trigger_radius if d.get_noise() > 0.6 else trigger_radius
+					if dist < r:
+						_start_fall.rpc()
+						break
 		State.SHAKING:
 			_timer -= delta
 			_mesh.position.x = sin(_timer * 70.0) * 0.05
@@ -77,20 +79,45 @@ func _physics_process(delta: float) -> void:
 			_drop += _fall_speed * delta
 			_mesh.position.y = -length * 0.5 - _drop
 			var tip_y := global_position.y - length - _drop
-			if flat_dist < 0.9 and tip_y < p.y + 1.6 and tip_y > p.y - 0.2:
-				var dir := Vector3(p.x - global_position.x, 0.0, p.z - global_position.z)
-				if dir.length() < 0.05:
-					dir = Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
-				_player.receive_hit(dir.normalized(), hit_strength, Vector3(global_position.x, tip_y, global_position.z))
-				_shatter(tip_y)
-			elif tip_y <= floor_y:
+			if _player and not _player.is_dead:
+				var p := _player.global_position
+				var flat_dist := Vector2(p.x - global_position.x, p.z - global_position.z).length()
+				if flat_dist < 0.9 and tip_y < p.y + 1.6 and tip_y > p.y - 0.2:
+					var dir := Vector3(p.x - global_position.x, 0.0, p.z - global_position.z)
+					if dir.length() < 0.05:
+						dir = Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
+					_player.receive_hit(dir.normalized(), hit_strength, Vector3(global_position.x, tip_y, global_position.z))
+					_shatter(tip_y)
+					return
+			if tip_y <= floor_y:
 				_shatter(floor_y)
 		State.GONE:
 			_timer -= delta
-			if _timer <= 0.0 and flat_dist > 4.0:
-				state = State.HANGING
-				_mesh.position = Vector3(0.0, -length * 0.5, 0.0)
-				_mesh.visible = true
+			if multiplayer.is_server() and _timer <= 0.0 and not _anyone_below():
+				_respawn.rpc()
+
+
+func _anyone_below() -> bool:
+	for d in get_tree().get_nodes_in_group("player"):
+		var dp: Vector3 = d.global_position
+		if Vector2(dp.x - global_position.x, dp.z - global_position.z).length() < 4.0:
+			return true
+	return false
+
+
+@rpc("authority", "call_local", "reliable")
+func _start_fall() -> void:
+	if state != State.HANGING:
+		return
+	state = State.SHAKING
+	_timer = 0.7
+
+
+@rpc("authority", "call_local", "reliable")
+func _respawn() -> void:
+	state = State.HANGING
+	_mesh.position = Vector3(0.0, -length * 0.5, 0.0)
+	_mesh.visible = true
 
 
 func _shatter(at_y: float) -> void:

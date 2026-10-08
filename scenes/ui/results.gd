@@ -5,6 +5,7 @@ extends CanvasLayer
 @onready var rows_grid: GridContainer = $Center/Panel/Margin/VBox/Rows
 @onready var total_value: Label = $Center/Panel/Margin/VBox/TotalRow/Value
 @onready var restart_button: Button = $Center/Panel/Margin/VBox/Restart
+@onready var menu_button: Button = $Center/Panel/Margin/VBox/Menu
 
 const COLOR_PLUS := Color(0.45, 1.0, 0.5)
 const COLOR_MINUS := Color(1.0, 0.45, 0.4)
@@ -14,6 +15,7 @@ const COLOR_NORMAL := Color(0.92, 0.94, 0.97)
 func _ready() -> void:
 	visible = false
 	restart_button.pressed.connect(_on_restart_pressed)
+	menu_button.pressed.connect(func(): Network.leave_to_menu())
 
 
 ## rows — массив строк вида ["Название", "Значение", тип], где тип: 0 — обычный, 1 — плюс, -1 — минус.
@@ -41,9 +43,12 @@ func show_receipt(title: String, rows: Array, total: int) -> void:
 	visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Перезапускает уровень только хост
+	restart_button.disabled = not multiplayer.is_server()
+	restart_button.text = "Заново" if multiplayer.is_server() else "Ждём хоста..."
 	restart_button.grab_focus()
 
 
 func _on_restart_pressed() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	if multiplayer.is_server():
+		Network.restart_level()

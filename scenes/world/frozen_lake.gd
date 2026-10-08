@@ -19,7 +19,7 @@ extends Node3D
 @export var water_y := -0.7
 
 var _tiles := {}           # Vector2i -> Dictionary
-var _player: Node3D
+var _connected: Array = []
 var _thin_mats: Array[StandardMaterial3D] = []
 var _thick_mats: Array[StandardMaterial3D] = []
 var _splash: GPUParticles3D
@@ -93,33 +93,43 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _player == null:
-		_player = get_tree().get_first_node_in_group("player")
-		if _player:
-			_player.landed.connect(_on_player_landed)
+	# Треск льда считает только хост — по всем дронам — и рассылает изменения
+	if not multiplayer.is_server():
 		return
 
-	var current = _tile_under_player()
+	for d in get_tree().get_nodes_in_group("player"):
+		if not _connected.has(d):
+			_connected.append(d)
+			d.landed.connect(_on_drone_landed.bind(d))
+
+	# Какие плитки сейчас под дронами и с какой силой давят
+	var pressure := {}
+	for d in get_tree().get_nodes_in_group("player"):
+		var key = _tile_under(d)
+		if key == null:
+			continue
+		var rate := thin_rate
+		if d.is_carrying():
+			rate *= carry_mult
+		if d.is_sprinting:
+			rate *= run_mult
+		pressure[key] = pressure.get(key, 0.0) + rate
 
 	for key in _tiles:
 		var t: Dictionary = _tiles[key]
 		if t["broken"]:
 			t["timer"] -= delta
-			if t["timer"] <= 0.0 and key != _tile_key_at(_player.global_position):
-				_restore(t)
+			if t["timer"] <= 0.0 and not _anyone_over(key):
+				_restore_tile.rpc(key)
 			continue
-		if key == current:
-			var rate := thin_rate
+		if pressure.has(key):
+			var rate: float = pressure[key]
 			if t["thick"]:
 				rate *= thick_mult
-			if _player.get_held_parcel() != null:
-				rate *= carry_mult
-			if _player.is_sprinting:
-				rate *= run_mult
 			t["stress"] += rate * delta
 		else:
 			t["stress"] = maxf(t["stress"] - heal_rate * delta, 0.0)
-		_update_tile(t)
+		_server_check_tile(key, t)
 
 
 func _tile_key_at(world_pos: Vector3) -> Vector2i:
@@ -127,18 +137,27 @@ func _tile_key_at(world_pos: Vector3) -> Vector2i:
 	return Vector2i(roundi(local.x / tile), roundi(local.z / tile))
 
 
-func _tile_under_player() -> Variant:
-	if not _player.is_on_floor():
+func _tile_under(drone: Node) -> Variant:
+	if not drone.is_grounded() or drone.is_dead:
 		return null
-	var local := to_local(_player.global_position)
+	var local := to_local(drone.global_position)
 	if local.y < -0.6 or local.y > 0.8:
 		return null
-	var key := _tile_key_at(_player.global_position)
+	var key := _tile_key_at(drone.global_position)
 	return key if _tiles.has(key) else null
 
 
-func _on_player_landed(fall_speed: float) -> void:
-	var key = _tile_under_player()
+func _anyone_over(key: Vector2i) -> bool:
+	for d in get_tree().get_nodes_in_group("player"):
+		if _tile_key_at(d.global_position) == key:
+			return true
+	return false
+
+
+func _on_drone_landed(fall_speed: float, drone: Node) -> void:
+	if not is_instance_valid(drone):
+		return
+	var key = _tile_under(drone)
 	if key == null:
 		return
 	var t: Dictionary = _tiles[key]
@@ -148,27 +167,39 @@ func _on_player_landed(fall_speed: float) -> void:
 	if t["thick"]:
 		amount *= thick_mult * 2.0
 	t["stress"] += amount
-	_update_tile(t)
+	_server_check_tile(key, t)
 
 
-func _update_tile(t: Dictionary) -> void:
-	var stage := 0
+func _server_check_tile(key: Vector2i, t: Dictionary) -> void:
 	if t["stress"] >= 1.0:
-		_break(t)
+		_break_tile.rpc(key)
 		return
-	elif t["stress"] > 0.7:
+	var stage := 0
+	if t["stress"] > 0.7:
 		stage = 2
 	elif t["stress"] > 0.35:
 		stage = 1
 	if stage != t["stage"]:
-		if stage > t["stage"] and _player:
-			_player.add_shake(0.05)  # хруст
-		t["stage"] = stage
-		var mats := _thick_mats if t["thick"] else _thin_mats
-		(t["mesh"] as MeshInstance3D).material_override = mats[stage]
+		_set_tile_stage.rpc(key, stage)
 
 
-func _break(t: Dictionary) -> void:
+@rpc("authority", "call_local", "reliable")
+func _set_tile_stage(key: Vector2i, stage: int) -> void:
+	if not _tiles.has(key):
+		return
+	var t: Dictionary = _tiles[key]
+	if stage > t["stage"] and Network.local_player and _tile_key_at(Network.local_player.global_position) == key:
+		Network.local_player.add_shake(0.05)   # хруст под ногами
+	t["stage"] = stage
+	var mats := _thick_mats if t["thick"] else _thin_mats
+	(t["mesh"] as MeshInstance3D).material_override = mats[stage]
+
+
+@rpc("authority", "call_local", "reliable")
+func _break_tile(key: Vector2i) -> void:
+	if not _tiles.has(key):
+		return
+	var t: Dictionary = _tiles[key]
 	t["broken"] = true
 	t["timer"] = respawn_time
 	t["stress"] = 0.0
@@ -178,12 +209,18 @@ func _break(t: Dictionary) -> void:
 	var body := t["body"] as Node3D
 	_splash.global_position = body.global_position
 	_splash.restart()
-	if _player:
-		_player.add_shake(0.12)
+	if Network.local_player and Network.local_player.global_position.distance_to(body.global_position) < 6.0:
+		Network.local_player.add_shake(0.12)
 
 
-func _restore(t: Dictionary) -> void:
+@rpc("authority", "call_local", "reliable")
+func _restore_tile(key: Vector2i) -> void:
+	if not _tiles.has(key):
+		return
+	var t: Dictionary = _tiles[key]
 	t["broken"] = false
+	t["stress"] = 0.0
+	t["stage"] = 0
 	(t["shape"] as CollisionShape3D).set_deferred("disabled", false)
 	var mi := t["mesh"] as MeshInstance3D
 	mi.visible = true
