@@ -20,6 +20,8 @@
 [ext_resource type="Script" path="res://scenes/world/zone_banner.gd" id="16_banner"]
 [ext_resource type="PackedScene" path="res://scenes/props/barrel.tscn" id="17_barrel"]
 [ext_resource type="PackedScene" path="res://scenes/props/heavy_parcel.tscn" id="18_heavy"]
+[ext_resource type="Script" path="res://scenes/world/model_prop.gd" id="30_prop"]
+[ext_resource type="PackedScene" path="res://assets/props/Insurgent.glb" id="31_campship"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.36, 0.53, 0.8, 1)
@@ -136,10 +138,10 @@ shader = ExtResource("22_water")
 
 [node name="Borea" type="Node3D"]
 script = ExtResource("1_level")
-fast_time = 240.0
-tip_deadline = 540.0
+fast_time = 330.0
+tip_deadline = 720.0
 ambient_snow = true
-spawn_point = Vector3(0, 1, 330)
+spawn_point = Vector3(0, 1, 510)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")
@@ -157,92 +159,50 @@ terrain_material = SubResource("Mat_terrain")
 
 [node name="Camp" type="Node3D" parent="."]
 
-[node name="ShipHull" type="CSGBox3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 332)
-use_collision = true
-size = Vector3(5, 2.4, 10)
-material = SubResource("Mat_white")
-
-[node name="ShipCockpit" type="CSGSphere3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.6, 326.6)
-use_collision = true
-radius = 1.8
-material = SubResource("Mat_teal")
-
-[node name="ShipStripe" type="CSGBox3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 332)
-size = Vector3(5.1, 0.5, 10.1)
-material = SubResource("Mat_orange")
-
-[node name="ShipEngine" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.2, 337.3)
-radius = 1.0
-height = 0.6
-material = SubResource("Mat_engine")
-
-[node name="ShipLeg1" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 329)
-use_collision = true
-radius = 0.2
-height = 1.6
-material = SubResource("Mat_metal")
-
-[node name="ShipLeg2" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 329)
-use_collision = true
-radius = 0.2
-height = 1.6
-material = SubResource("Mat_metal")
-
-[node name="ShipLeg3" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 0.6, 335)
-use_collision = true
-radius = 0.2
-height = 1.6
-material = SubResource("Mat_metal")
-
-[node name="ShipLeg4" type="CSGCylinder3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0.6, 335)
-use_collision = true
-radius = 0.2
-height = 1.6
-material = SubResource("Mat_metal")
+[node name="CampShip" type="StaticBody3D" parent="Camp"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -13, 0, 512)
+script = ExtResource("30_prop")
+model = ExtResource("31_campship")
+target_length = 16.0
+lift = 1.1
+frost = 0.3
+landing_gear = true
 
 [node name="Pedestal" type="CSGBox3D" parent="Camp" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 321)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 501)
 use_collision = true
 size = Vector3(1.2, 0.8, 1.2)
 material = SubResource("Mat_teal")
 
 [node name="Barrel1" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.6, 330)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.6, 510)
 
 [node name="Barrel2" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.6, 330)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.8, 0.6, 510)
 
 [node name="Barrel3" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0.6, 331)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.4, 0.6, 511)
 
 [node name="Barrel4" parent="Camp" instance=ExtResource("17_barrel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.6, 324)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.6, 504)
 
 [node name="CampLight" type="OmniLight3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 323)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 503)
 light_color = Color(1, 0.8, 0.55, 1)
 light_energy = 1.5
 omni_range = 10.0
 
 [node name="CampSign" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 326)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.6, 506)
 billboard = 1
 text = "ЛАГЕРЬ  RUSTY BOAR"
 font_size = 72
 outline_size = 16
 
 [node name="CampHint" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 315)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 495)
 billboard = 1
-text = "Станция «Борея-7» — 520 м на север"
+text = "Станция «Борея-7» — 700 м на север"
 font_size = 44
 outline_size = 16
 
@@ -919,10 +879,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -199)
 [node name="ZoneBanners" type="Node3D" parent="."]
 
 [node name="Banner1" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 314)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 494)
 script = ExtResource("16_banner")
 title = "Замёрзшая река"
-subtitle = "Сначала покатайся по льду — дальше будет сложнее"
+subtitle = "Огромное озеро. Сначала покатайся — дальше будет сложнее"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner1"]
 shape = SubResource("Shape_banner")
@@ -981,6 +941,69 @@ subtitle = "Пункт выдачи прямо перед тобой"
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner7"]
 shape = SubResource("Shape_banner")
 
+[node name="RiverBanner1" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 453)
+script = ExtResource("16_banner")
+title = "Торосы"
+subtitle = "Скользкие гряды и первый спуск — тормози заранее"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner1"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner2" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 382)
+script = ExtResource("16_banner")
+title = "Вмёрзший корабль"
+subtitle = "Обломки, грузы и снежные вихри. У носа корабля — бортовой самописец (бонус)"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner2"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner3" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 338)
+script = ExtResource("16_banner")
+title = "Полыньи"
+subtitle = "Тонкий лёд трещит, перешейки, разводье с льдинами"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner3"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner4" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 281)
+script = ExtResource("16_banner")
+title = "Хрустальный лес"
+subtitle = "Кристаллы рушатся, если подойти. На чёрном льду трещина бежит за тобой — не останавливайся"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner4"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner5" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 236)
+script = ExtResource("16_banner")
+title = "Ледяные холмы"
+subtitle = "Глыбы сходят волнами. Услышал гул — уходи из-под холмов"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner5"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner6" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 192)
+script = ExtResource("16_banner")
+title = "Гейзеры, ветер и вихри"
+subtitle = "Пар над конусом — скоро удар. Вихри затягивают и раскручивают"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner6"]
+shape = SubResource("Shape_banner")
+
+[node name="RiverBanner7" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 136)
+script = ExtResource("16_banner")
+title = "Последний рубеж"
+subtitle = "Разгонись на трамплине или лови льдину"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner7"]
+shape = SubResource("Shape_banner")
+
 [node name="ZoneA_IceRiver" type="Node3D" parent="."]
 
 [node name="IceRiver" type="StaticBody3D" parent="ZoneA_IceRiver"]
@@ -988,70 +1011,25 @@ script = ExtResource("20_river")
 ice_material = SubResource("Mat_river_ice")
 water_material = SubResource("Mat_river_water")
 
-[node name="RiverBanner1" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 286)
-script = ExtResource("16_banner")
-title = "Торосы"
-subtitle = "Скользкие гряды льда и первый спуск. Не разгоняйся слишком сильно"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner1"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner2" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 241)
-script = ExtResource("16_banner")
-title = "Полыньи"
-subtitle = "Тонкий лёд трещит, перешейки, разводье с льдинами"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner2"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner3" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 203)
-script = ExtResource("16_banner")
-title = "Ледяные холмы"
-subtitle = "С вершин срываются глыбы — идите ложбинами и смотрите вверх"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner3"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner4" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 156)
-script = ExtResource("16_banner")
-title = "Гейзеры и ветер"
-subtitle = "Пар над конусом — гейзер скоро ударит. Ветер сносит к полыньям"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner4"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner5" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 127)
-script = ExtResource("16_banner")
-title = "Последний рубеж"
-subtitle = "Разгонись на трамплине или лови льдину"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner5"]
-shape = SubResource("Shape_banner")
-
 [node name="OrderParcel" parent="." instance=ExtResource("5_parcel")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 321)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.15, 501)
 display_name = "Медикаменты"
 base_price = 800
 fragility = 1.2
 
 [node name="HeavyCargo1" parent="." instance=ExtResource("18_heavy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.5, 321)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.5, 501)
 display_name = "Генератор"
 base_price = 600
 
 [node name="HeavyCargo2" parent="." instance=ExtResource("18_heavy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 321)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0.5, 501)
 display_name = "Буровая головка"
 base_price = 450
 fragility = 0.3
 
 [node name="CargoSign" type="Label3D" parent="Camp"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 319)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.6, 499)
 billboard = 1
 text = "Тяжёлые грузы — бонус. Нести вдвоём"
 font_size = 36

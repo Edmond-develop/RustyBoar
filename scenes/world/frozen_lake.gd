@@ -228,6 +228,10 @@ func _restore_tile(key: Vector2i) -> void:
 
 
 func _on_water_entered(body: Node3D) -> void:
+	# Над большим замёрзшим озером в воде плавают — этим занимаются дрон и посылка сами
+	var lake = get_tree().get_first_node_in_group("ice_lake")
+	if lake and lake.in_bounds(body.global_position):
+		return
 	if body is Parcel:
 		(body as Parcel).server_return_to_path()
 	elif body.has_method("kill"):

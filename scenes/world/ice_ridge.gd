@@ -8,6 +8,7 @@ extends StaticBody3D
 @export var height := 0.8
 @export var gaps := PackedVector2Array()
 @export var seed_value := 1
+@export_enum("Плиты", "Навал глыб") var style := 0   ## Вид гряды
 
 static var _ice_mat: StandardMaterial3D
 static var _chip_mat: StandardMaterial3D
@@ -32,6 +33,9 @@ func _ready() -> void:
 		var cx := x + w * 0.5
 		x += w * rng.randf_range(0.55, 0.85)   # плиты наползают друг на друга
 		if _in_gap(cx):
+			continue
+		if style == 1:
+			_rubble(cx, w, rng, slabs, chips)
 			continue
 		# Плита: широкая, тонкая, сильно наклонена в сторону юга или севера
 		var size := Vector3(w, rng.randf_range(0.22, 0.45), height * rng.randf_range(1.2, 2.2))
@@ -65,6 +69,21 @@ func _ready() -> void:
 	_multimesh(slabs, _box_mesh(_ice_mat))
 	_multimesh(chips, _chip_mesh())
 	_multimesh(drifts, _drift_mesh())
+
+
+## Навал: груда угловатых глыб разного размера
+func _rubble(cx: float, w: float, rng: RandomNumberGenerator, blocks: Array[Transform3D], chips: Array[Transform3D]) -> void:
+	for i in rng.randi_range(2, 4):
+		var size := Vector3(rng.randf_range(0.7, 1.5), rng.randf_range(0.5, 1.2) * height, rng.randf_range(0.7, 1.5))
+		var basis := Basis.from_euler(Vector3(rng.randf_range(-0.6, 0.6), rng.randf() * TAU, rng.randf_range(-0.6, 0.6)))
+		var pos := Vector3(cx + rng.randf_range(-w, w) * 0.4, size.y * 0.4 + (0.35 * height if i > 1 else 0.0), rng.randf_range(-0.8, 0.8))
+		blocks.append(Transform3D(basis * Basis.from_scale(size), pos))
+		_add_collision(Transform3D(basis, pos), size)
+	for i in rng.randi_range(3, 6):
+		var s := rng.randf_range(0.15, 0.4)
+		var cb := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU))
+		chips.append(Transform3D(cb * Basis.from_scale(Vector3(s, s * 0.7, s * 1.2)),
+			Vector3(cx + rng.randf_range(-w, w) * 0.7, s * 0.3, rng.randf_range(-2.0, 2.0))))
 
 
 func _in_gap(x: float) -> bool:

@@ -1,6 +1,8 @@
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled;
 // Тёмная ледяная вода с лёгкой рябью.
+// Снизу (если смотреть из-под воды) поверхность — светлая полупрозрачная плёнка:
+// в полынье сквозь неё видно небо, подо льдом — тёмный лёд.
 
 uniform vec3 water_color : source_color = vec3(0.03, 0.12, 0.2);
 uniform vec3 shallow_tint : source_color = vec3(0.08, 0.28, 0.38);
@@ -36,4 +38,9 @@ void fragment() {
 	ROUGHNESS = 0.05;
 	SPECULAR = 0.6;
 	ALPHA = 0.92;
+	if (!FRONT_FACING) {
+		ALBEDO = mix(vec3(0.2, 0.45, 0.5), vec3(0.45, 0.7, 0.72), h2);
+		EMISSION = vec3(0.04, 0.12, 0.14);
+		ALPHA = 0.45;
+	}
 }

@@ -1,53 +1,64 @@
 extends Node3D
-## Глыбы на вершине ледяного холма. Время от времени одна из них срывается
-## и скатывается по настоящей физике: разгоняется на склоне, катится по льду,
-## сбивает посылки, может свалиться в полынью.
+## Глыбы на вершине ледяного холма. Сходят ВОЛНАМИ: все холмы одновременно,
+## с каждого по несколько глыб в разные стороны. Перед волной — гул и снег с вершин.
+## Глыбы катятся по настоящей физике: разгоняются на склоне, сбивают посылки,
+## могут свалиться в полынью.
 ##
-## По сети: физику считает только хост и рассылает положения глыб остальным.
-## Попадание по своему дрону проверяет каждый игрок сам.
+## По сети: физику считает хост и рассылает положения глыб остальным;
+## время волн общее для всех. Попадание по своему дрону проверяет каждый сам.
 
-@export var pool_size := 2
+@export var per_wave := 5
 @export var radius := 1.1
-@export var interval_min := 6.0
-@export var interval_max := 10.0
-@export var lifetime := 14.0
+@export var wave_period := 12.0       ## Как часто сходят волны
+@export var warning_time := 1.8       ## Сколько длится гул перед волной
+@export var first_wave_at := 8.0      ## Первая волна (сек от начала уровня)
+@export var lifetime := 22.0
+@export var launch_speed := Vector2(7.0, 10.0)   ## Начальная скорость (от, до)
+@export var max_travel := 90.0        ## Дальше этого от холма — убираем
 @export var seed_value := 1
 
 static var _mesh: ArrayMesh
 
 var _boulders: Array[RigidBody3D] = []
-var _alive: Array[float] = []      # сколько ещё живёт (0 — спрятана)
+var _alive: Array[float] = []
 var _net_pos: Array[Vector3] = []
 var _net_rot: Array[Quaternion] = []
 var _net_on: Array[bool] = []
 var _net_speed: Array[float] = []
 var _hit_cooldown: Array[float] = []
-var _timer := 0.0
+var _last_wave := -1
 var _send_timer := 0.0
+var _local_t := 0.0
 var _rng := RandomNumberGenerator.new()
 var _dust: GPUParticles3D
+var _rumble: GPUParticles3D
 
 
 func _ready() -> void:
 	_rng.seed = seed_value
-	_timer = _rng.randf_range(1.0, interval_max)
 	if _mesh == null:
 		_mesh = _make_rock_mesh(radius)
 
 	var mat := PhysicsMaterial.new()
-	mat.friction = 0.3
-	mat.bounce = 0.15
-	for i in pool_size:
+	mat.friction = 0.12
+	mat.bounce = 0.2
+	for i in per_wave:
 		var b := RigidBody3D.new()
 		b.name = "B%d" % i
 		b.mass = 60.0
 		b.physics_material_override = mat
 		b.continuous_cd = true
+		# Без сопротивления — катится далеко по скользкому льду
+		b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+		b.linear_damp = 0.02
+		b.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+		b.angular_damp = 0.02
 		var mi := MeshInstance3D.new()
 		mi.mesh = _mesh
+		mi.scale = Vector3.ONE * _rng.randf_range(0.85, 1.25)
 		b.add_child(mi)
 		var shape := SphereShape3D.new()
-		shape.radius = radius
+		shape.radius = radius * mi.scale.x
 		var col := CollisionShape3D.new()
 		col.shape = shape
 		b.add_child(col)
@@ -62,44 +73,55 @@ func _ready() -> void:
 		_hit_cooldown.append(0.0)
 		_park(i)
 
-	_dust = FX.particles(Color(0.95, 0.97, 1.0, 0.85), 40, 1.0, 0.14, 1.5, 3.5, Vector3(0, -6, 0), 70.0)
+	_dust = FX.particles(Color(0.95, 0.97, 1.0, 0.85), 60, 1.2, 0.16, 2.0, 4.5, Vector3(0, -6, 0), 80.0)
 	add_child(_dust)
+	_rumble = FX.particles(Color(0.95, 0.97, 1.0, 0.7), 40, 1.5, 0.1, 0.5, 1.5, Vector3(0, -3, 0), 60.0, false)
+	FX.set_box(_rumble, Vector3(2.0, 0.5, 2.0))
+	add_child(_rumble)
 
 
 func _physics_process(delta: float) -> void:
+	_local_t += delta
+	var t: float = Network.game_time if Network.in_game else _local_t
+	var since := t - first_wave_at
+	var cycle := fposmod(since, wave_period)
+	var wave := int(floor(since / wave_period)) if since >= 0.0 else -1
+	# Гул перед волной: снег сыплется с вершины
+	_rumble.emitting = since >= -warning_time and cycle > wave_period - warning_time
+
 	if multiplayer.is_server():
+		if wave > _last_wave and wave >= 0:
+			_last_wave = wave
+			_release_wave(wave)
 		_server_update(delta)
 	else:
-		for i in _boulders.size():
-			var b := _boulders[i]
-			if _net_on[i]:
-				var t := clampf(delta * 15.0, 0.0, 1.0)
-				if b.global_position.distance_to(_net_pos[i]) > 5.0:
-					b.global_position = _net_pos[i]
-				else:
-					b.global_position = b.global_position.lerp(_net_pos[i], t)
-				b.quaternion = b.quaternion.slerp(_net_rot[i], t)
-			elif b.global_position.y > -50.0:
-				_park(i)
+		_client_update(delta)
 	_check_local_hits(delta)
 
 
-func _server_update(delta: float) -> void:
-	_timer -= delta
-	if _timer <= 0.0:
-		_timer = _rng.randf_range(interval_min, interval_max)
-		for i in _boulders.size():
-			if _alive[i] <= 0.0:
-				_release(i)
-				break
+func _release_wave(wave: int) -> void:
+	# Направления разлёта: равномерно по кругу, поворот зависит от номера волны
+	var base := fposmod(float(wave) * 2.39 + float(seed_value) * 0.7, TAU)
+	for i in _boulders.size():
+		var b := _boulders[i]
+		_alive[i] = lifetime
+		var angle := base + TAU * i / _boulders.size() + _rng.randf_range(-0.3, 0.3)
+		var dir := Vector3(cos(angle), 0.0, sin(angle))
+		b.freeze = false
+		b.global_position = global_position + dir * 0.9 + Vector3(0, 0.2 * i, 0)
+		b.linear_velocity = dir * _rng.randf_range(launch_speed.x, launch_speed.y) + Vector3.UP * 1.5
+		b.angular_velocity = Vector3(dir.z, 0.0, -dir.x) * 6.0
+	_fx_release.rpc()
 
+
+func _server_update(delta: float) -> void:
 	for i in _boulders.size():
 		if _alive[i] <= 0.0:
 			continue
 		_alive[i] -= delta
 		var b := _boulders[i]
-		# Провалилась в воду или время вышло — убираем
-		if _alive[i] <= 0.0 or b.global_position.y < IceRiver.river_y(b.global_position.z) - 1.5:
+		var far := Vector2(b.global_position.x - global_position.x, b.global_position.z - global_position.z).length() > max_travel
+		if _alive[i] <= 0.0 or far or b.global_position.y < IceRiver.river_y(b.global_position.z) - 1.5:
 			_alive[i] = 0.0
 			_park(i)
 
@@ -118,15 +140,18 @@ func _server_update(delta: float) -> void:
 		_net_state.rpc(positions, rotations, on, speeds)
 
 
-func _release(i: int) -> void:
-	var b := _boulders[i]
-	_alive[i] = lifetime
-	b.freeze = false
-	b.global_position = global_position + Vector3(_rng.randf_range(-0.3, 0.3), 0.0, _rng.randf_range(-0.3, 0.3))
-	var dir := Vector3.RIGHT.rotated(Vector3.UP, _rng.randf() * TAU)
-	b.linear_velocity = dir * _rng.randf_range(1.5, 3.0)
-	b.angular_velocity = Vector3.ZERO
-	_fx_release.rpc()
+func _client_update(delta: float) -> void:
+	for i in _boulders.size():
+		var b := _boulders[i]
+		if _net_on[i]:
+			var k := clampf(delta * 15.0, 0.0, 1.0)
+			if b.global_position.distance_to(_net_pos[i]) > 5.0:
+				b.global_position = _net_pos[i]
+			else:
+				b.global_position = b.global_position.lerp(_net_pos[i], k)
+			b.quaternion = b.quaternion.slerp(_net_rot[i], k)
+		elif b.global_position.y > -50.0:
+			_park(i)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -134,8 +159,8 @@ func _fx_release() -> void:
 	_dust.global_position = global_position
 	_dust.restart()
 	var me = Network.local_player
-	if me and me.global_position.distance_to(global_position) < 30.0:
-		me.add_shake(0.05)
+	if me and me.global_position.distance_to(global_position) < 35.0:
+		me.add_shake(0.08)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -155,7 +180,6 @@ func _park(i: int) -> void:
 	b.global_position = global_position + Vector3(i * 5.0, -80.0, 0.0)
 
 
-## Свой дрон: попала ли в него катящаяся глыба
 func _check_local_hits(delta: float) -> void:
 	var me = Network.local_player
 	for i in _boulders.size():
@@ -167,17 +191,16 @@ func _check_local_hits(delta: float) -> void:
 		if b.global_position.y < -40.0 or _hit_cooldown[i] > 0.0:
 			continue
 		var to_me: Vector3 = me.global_position + Vector3.UP * 0.9 - b.global_position
-		if to_me.length() > radius + 0.6:
+		if to_me.length() > radius * 1.25 + 0.6:
 			continue
 		var speed: float = b.linear_velocity.length() if multiplayer.is_server() else _net_speed[i]
 		if speed < 2.0:
-			continue   # лежащая глыба не бьёт
+			continue
 		_hit_cooldown[i] = 1.0
 		var push := Vector3(to_me.x, 0.0, to_me.z).normalized()
-		me.receive_hit(push, clampf(speed * 1.2, 7.0, 12.0), b.global_position + to_me * 0.5)
+		me.receive_hit(push, clampf(speed * 1.0, 7.0, 13.0), b.global_position + to_me * 0.5)
 
 
-## Угловатая ледяная глыба: сфера, вершины которой сдвинуты шумом
 static func _make_rock_mesh(r: float) -> ArrayMesh:
 	var sphere := SphereMesh.new()
 	sphere.radius = r
@@ -191,8 +214,7 @@ static func _make_rock_mesh(r: float) -> ArrayMesh:
 	noise.frequency = 1.6
 	for i in verts.size():
 		var v := verts[i]
-		var n := v.normalized()
-		verts[i] = v * (1.0 + noise.get_noise_3dv(n * 2.0) * 0.35)
+		verts[i] = v * (1.0 + noise.get_noise_3dv(v.normalized() * 2.0) * 0.35)
 	arrays[Mesh.ARRAY_VERTEX] = verts
 	var temp := ArrayMesh.new()
 	temp.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)

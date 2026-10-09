@@ -23,6 +23,7 @@ signal holders_changed
 @export var max_carry_distance := 3.4   ## Тяжёлый груз падает, если носильщики разошлись дальше
 @export var label_height := 0.6
 @export var lost_y := -12.0             ## Упала ниже (в пропасть) — возвращается на тропу
+@export var soak_percent := 2.5         ## Сколько % цены теряет за секунду в воде
 
 const DAMAGE_PER_MS := 8.0
 
@@ -46,6 +47,10 @@ var _start_xform := Transform3D.IDENTITY
 var _safe_pos := Vector3.ZERO
 var _has_safe_pos := false
 var _safe_timer := 0.0
+var _lake: Node = null
+var _floating := false
+var _float_anchor := Vector3.ZERO
+var _soak_t := 0.0
 
 @onready var value_label: Label3D = $ValueLabel
 
@@ -109,7 +114,10 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		if holders.size() > 0:
 			_drag(delta)
-		_detect_impacts(delta)
+		if _float_in_water(delta):
+			_prev_velocity = linear_velocity
+		else:
+			_detect_impacts(delta)
 		_check_lost()
 		_send_state(delta)
 	else:
@@ -183,6 +191,53 @@ func _detect_impacts(delta: float) -> void:
 		_server_damage((impact - safe_impact_speed) * DAMAGE_PER_MS)
 		_damage_cooldown = 0.15
 	_prev_velocity = linear_velocity
+
+
+## Хост: в полынье посылка держится на плаву, медленно дрейфует и мокнет
+func _float_in_water(delta: float) -> bool:
+	if _lake == null:
+		_lake = get_tree().get_first_node_in_group("ice_lake")
+		if _lake == null:
+			return false
+	var p := global_position
+	if not _lake.in_bounds(p):
+		_stop_floating()
+		return false
+	if not _lake.is_hole(p.x, p.z):
+		# Затянуло под кромку льда — выталкиваем обратно в полынью
+		if _floating and p.y < _lake.river_y(p.z) - 0.1:
+			var back := _float_anchor - p
+			back.y = 0.0
+			linear_velocity.x = back.x * 2.0
+			linear_velocity.z = back.z * 2.0
+			return true
+		_stop_floating()
+		return false
+	var wy: float = _lake.water_y(p.z)
+	if p.y > wy + 0.6:
+		_stop_floating()   # ещё летит над полыньёй
+		return false
+	if not _floating:
+		_floating = true
+		_float_anchor = p
+		_soak_t = 0.0
+		gravity_scale = 0.0
+	var bob := sin(Time.get_ticks_msec() * 0.002 + p.x) * 0.08
+	linear_velocity.y = lerpf(linear_velocity.y, (wy - p.y) * 3.0 + bob, clampf(6.0 * delta, 0.0, 1.0))
+	linear_velocity.x *= 0.97
+	linear_velocity.z *= 0.97
+	angular_velocity *= 0.95
+	_soak_t += delta
+	if _soak_t >= 1.0:
+		_soak_t = 0.0
+		_server_damage(soak_percent)
+	return true
+
+
+func _stop_floating() -> void:
+	if _floating:
+		_floating = false
+		gravity_scale = 1.0
 
 
 ## Запоминаем надёжное место, пока посылку несут
@@ -337,6 +392,7 @@ func _set_holders(new_holders: Array) -> void:
 	holders = new_holders.duplicate()
 	var now_carried := is_carried()
 	if now_carried and not was_carried:
+		_stop_floating()
 		collision_layer = 0
 		collision_mask = 0
 		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC

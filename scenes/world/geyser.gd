@@ -10,8 +10,8 @@ extends Node3D
 @export_range(0.0, 1.0) var phase := 0.0
 @export var warning_time := 1.4
 @export var erupt_time := 1.1
-@export var radius := 1.4
-@export var launch_speed := 11.0
+@export var radius := 1.6
+@export var launch_speed := 17.7     ## ≈ 10 м вверх
 @export var damage := 8.0
 
 var _local_t := 0.0
@@ -75,14 +75,14 @@ func _ready() -> void:
 	_bubbles.position.y = 0.55
 	add_child(_bubbles)
 
-	_column = FX.particles(Color(0.9, 0.96, 1.0, 0.8), 220, 1.2, 0.12, 10.0, 16.0, Vector3(0, -12, 0), 7.0, false)
+	_column = FX.particles(Color(0.9, 0.96, 1.0, 0.8), 320, 1.6, 0.14, 15.0, 20.0, Vector3(0, -12, 0), 6.0, false)
 	FX.set_box(_column, Vector3(radius * 0.3, 0.1, radius * 0.3))
 	_column.position.y = 0.6
 	add_child(_column)
 
-	_cloud = FX.particles(Color(0.95, 0.97, 1.0, 0.35), 40, 2.5, 0.9, 1.0, 3.0, Vector3(0, 0.6, 0), 60.0, false)
+	_cloud = FX.particles(Color(0.95, 0.97, 1.0, 0.35), 60, 3.0, 1.1, 1.5, 4.0, Vector3(0, 0.8, 0), 60.0, false)
 	FX.set_box(_cloud, Vector3(radius, 1.5, radius))
-	_cloud.position.y = 2.5
+	_cloud.position.y = 6.0
 	add_child(_cloud)
 
 
@@ -124,4 +124,4 @@ func _physics_process(delta: float) -> void:
 			var flat := Vector2(p.x - global_position.x, p.z - global_position.z).length()
 			if flat < radius * 1.1 and p.y < global_position.y + 2.5:
 				_blasted = true
-				me.launch(launch_speed, damage, 0.6, 5.0)
+				me.launch(launch_speed, damage, 0.6, 5.0, true)

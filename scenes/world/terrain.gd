@@ -4,8 +4,8 @@ extends StaticBody3D
 ## Высота в каждой точке = лёгкий шум + специально спланированные участки.
 ## Тропа идёт с юга (z = +150, лагерь) на север (z = -200, станция) вдоль x ≈ 0.
 ##
-##   z  345 … 315  Лагерь
-##   z  312 … 80   Огромное замёрзшее озеро на всю ширину (лёд, полыньи, спуски)
+##   z  525 … 497  Лагерь
+##   z  495 … 80   Огромное замёрзшее озеро на всю ширину (~400 м)
 ##   z   72 … 8    Лавинный склон (гора на западе)
 ##   z   -2 … -40  Трещины (две пропасти поперёк пути)
 ##   z  -42 … -106 Плато бурь (обрывы по бокам)
@@ -15,7 +15,7 @@ extends StaticBody3D
 ## Чтобы поменять форму мира — правь функцию height_at().
 
 @export var size_x := 360.0
-@export var size_z := 570.0
+@export var size_z := 750.0
 @export var north_edge_z := -215.0
 @export var cell := 1.5
 @export var noise_seed := 7
@@ -53,12 +53,13 @@ func height_at(x: float, z: float) -> float:
 	h += maxf(_big_noise.get_noise_2d(x, z), 0.0) * 10.0 * smoothstep(20.0, 45.0, ax)
 
 	# Замёрзшее озеро: дно подо льдом и пологие берега далеко по краям
-	var wr := _band(z, 314.0, 80.0, 6.0)
+	var wr := _band(z, 497.0, 80.0, 6.0)
 	if wr > 0.0:
 		var ry := IceRiver.river_y(z)
-		var water := _band(z, 312.0, 92.0, 0.5)
+		# Вода только под льдом (с запасом от краёв) — у входа на лёд нет провала
+		var water := _band(z, 492.0, 93.0, 1.0)
 		var inside := 1.0 - smoothstep(RIVER_HALF - 1.0, RIVER_HALF + 1.0, ax)
-		var bed := ry - 6.0 * water
+		var bed := ry - (IceRiver.WATER_GAP + IceRiver.lake_depth(x, z)) * water
 		var shore := ry + clampf((ax - RIVER_HALF) * 0.35, 0.0, 6.0)
 		h = lerpf(h, lerpf(shore, bed, inside), wr)
 
@@ -94,9 +95,9 @@ func height_at(x: float, z: float) -> float:
 	h = lerpf(h, -6.0, 1.0 - smoothstep(0.98, 1.08, d))
 
 	# Горы по краям мира (слишком крутые, чтобы забраться)
-	var edge_start := lerpf(70.0, RIVER_HALF + 12.0, _band(z, 318.0, 84.0, 8.0))
+	var edge_start := lerpf(70.0, RIVER_HALF + 12.0, _band(z, 500.0, 84.0, 8.0))
 	var edge := clampf((ax - edge_start) * 1.5, 0.0, 45.0)
-	edge += clampf((z - 342.0) * 1.5, 0.0, 45.0)
+	edge += clampf((z - 522.0) * 1.5, 0.0, 45.0)
 	edge += clampf((north_edge_z + 7.0 - z) * 1.5, 0.0, 45.0)
 	h += edge + edge * 0.15 * _big_noise.get_noise_2d(z * 2.0, x * 2.0)
 	return h

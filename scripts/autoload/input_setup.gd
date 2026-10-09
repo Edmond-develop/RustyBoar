@@ -17,6 +17,7 @@ func _ready() -> void:
 	_bind_keys("quiet", [KEY_CTRL, KEY_C])
 	_bind_keys("interact", [KEY_E])
 	_bind_keys("throw", [KEY_Q])
+	_bind_keys("shake_ice", [KEY_R])
 
 	# --- Геймпад: левый стик — движение ---
 	_bind_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)
@@ -36,6 +37,7 @@ func _ready() -> void:
 	_bind_button("throw", JOY_BUTTON_Y)
 	_bind_button("sprint", JOY_BUTTON_LEFT_STICK)
 	_bind_button("quiet", JOY_BUTTON_RIGHT_SHOULDER)
+	_bind_button("shake_ice", JOY_BUTTON_B)
 
 
 func _ensure_action(action: StringName) -> void:
