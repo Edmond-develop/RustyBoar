@@ -18,6 +18,34 @@ func _ready() -> void:
 	_bind_keys("interact", [KEY_E])
 	_bind_keys("throw", [KEY_Q])
 	_bind_keys("shake_ice", [KEY_R])
+	# ВРЕМЕННО, для проверки: позвать / отпустить летающего бота-помощника
+	_bind_keys("bot_add", [KEY_KP_ADD])
+	_bind_keys("bot_remove", [KEY_MINUS, KEY_KP_SUBTRACT])
+	# ВРЕМЕННО, для проверки: следующая локация (Shift — предыдущая)
+	_bind_keys("teleport", [KEY_EQUAL])
+	# ВРЕМЕННО, для проверки: боты-курьеры в скафандрах и команды им
+	_bind_keys("courier_add", [KEY_B])
+	_bind_keys("courier_remove", [KEY_N])
+	for i in 6:
+		_bind_keys("cmd_%d" % (i + 1), [KEY_1 + i])
+	# Инвентарь и предмет в руках
+	_bind_keys("inventory", [KEY_I])
+	_ensure_action("use_item")
+	var lmb_use := InputEventMouseButton.new()
+	lmb_use.button_index = MOUSE_BUTTON_LEFT
+	InputMap.action_add_event("use_item", lmb_use)
+	_ensure_action("use_alt")
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	InputMap.action_add_event("use_alt", rmb)
+	# ВРЕМЕННО: карта лабиринта, пока держишь Tab
+	_bind_keys("map", [KEY_TAB])
+	# Хоккей: бросок шайбы (левая кнопка мыши / правый курок)
+	_ensure_action("shoot")
+	var lmb := InputEventMouseButton.new()
+	lmb.button_index = MOUSE_BUTTON_LEFT
+	InputMap.action_add_event("shoot", lmb)
+	_bind_axis("shoot", JOY_AXIS_TRIGGER_RIGHT, 1.0)
 
 	# --- Геймпад: левый стик — движение ---
 	_bind_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)

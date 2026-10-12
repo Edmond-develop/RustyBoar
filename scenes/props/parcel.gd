@@ -24,6 +24,9 @@ signal holders_changed
 @export var label_height := 0.6
 @export var lost_y := -12.0             ## Упала ниже (в пропасть) — возвращается на тропу
 @export var soak_percent := 2.5         ## Сколько % цены теряет за секунду в воде
+## Как держат в руках: 0 — по размеру; 1 — лёгкая (под мышкой, одной рукой);
+## 2 — обычная (двумя руками перед собой); 3 — тяжёлая (в обнимку, медленно, без прыжков)
+@export_enum("По размеру", "Лёгкая", "Обычная", "Тяжёлая") var weight := 0
 
 const DAMAGE_PER_MS := 8.0
 
@@ -78,6 +81,23 @@ func is_carried() -> bool:
 	if required_carriers <= 1:
 		return holders.size() >= 1
 	return holders.size() >= required_carriers
+
+
+## Класс веса для переноски одним курьером: 1 — лёгкая, 2 — обычная, 3 — тяжёлая
+func carry_weight() -> int:
+	if weight > 0:
+		return weight
+	if has_meta("auto_weight"):
+		return int(get_meta("auto_weight"))
+	var w := 2
+	for c in get_children():
+		if c is CollisionShape3D and (c as CollisionShape3D).shape is BoxShape3D:
+			var sz: Vector3 = ((c as CollisionShape3D).shape as BoxShape3D).size
+			var v := sz.x * sz.y * sz.z
+			w = 1 if v < 0.09 else (3 if v > 0.35 else 2)
+			break
+	set_meta("auto_weight", w)
+	return w
 
 
 func is_lifted() -> bool:
@@ -272,7 +292,7 @@ func server_return_to_path() -> void:
 	_prev_velocity = Vector3.ZERO
 	if Network.is_online():
 		_net_state.rpc(global_position, quaternion)
-	get_tree().call_group("level", "announce", "«%s» возвращён на тропу" % display_name, "Курьерская служба выловила груз")
+	get_tree().call_group("level", "announce", "«%s» возвращён на тропу" % display_name, "Его вынесло к тропе")
 
 
 func _send_state(delta: float) -> void:

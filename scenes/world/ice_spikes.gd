@@ -67,5 +67,5 @@ func _physics_process(delta: float) -> void:
 			dir.y = 0.0
 			if dir.length() < 0.01:
 				dir = Vector3.FORWARD
-			body.receive_hit(dir.normalized(), hit_strength, global_position + Vector3.UP * 0.8)
+			body.receive_hit(dir.normalized(), hit_strength, global_position + Vector3.UP * 0.8, "pierce")
 			_cooldown = 0.8

@@ -1,10 +1,13 @@
 class_name IceLayout
 extends Node3D
-## Расставляет препятствия по замёрзшему озеру (~300 × 400 м) — поперёк всей
+## Расставляет препятствия по замёрзшему озеру (~450 × 830 м) — поперёк всей
 ## ширины, по нарастающей сложности, со спокойными полосами между участками:
 ##
-##   495…455  Каток — снег, пара вмёрзших грузов
-##   452…386  Торосы: гряды из плит и навалов, мелкие полыньи, первый спуск
+##   912…768  Каток (толстый лёд): большая горка с жёлобом, хоккей дронов (rink.gd)
+##   762…525  Ледяной лабиринт: стены из глыб 6–8 м, скользкие участки, арки с сосульками,
+##            метель, находки в тупиках; в конце — Ледяной вал с квестом «Зеркала и луч»
+##            (toros_field.gd, coop_gate.gd)
+##   520…386  Разломы: редкие полыньи, низкая гряда торосов внизу первого спуска
 ##   378…344  Вмёрзший корабль: обломки, контейнеры, столбы, снежные вихри
 ##   334…286  Полыньи: тонкий лёд, перешейки, разводье с льдинами, россыпь полыней
 ##   278…256  Хрустальный лес: рушащиеся кристаллы и чёрный лёд с бегущей трещиной
@@ -33,7 +36,9 @@ const CRACKS := preload("res://scenes/world/crack_zone.gd")
 const PILLAR := preload("res://scenes/world/crystal_pillar.gd")
 const WRECK := preload("res://scenes/world/wreck.gd")
 const DEBRIS := preload("res://scenes/world/debris.gd")
-const PARCEL_SCENE := preload("res://scenes/props/parcel.tscn")
+const TOROS := preload("res://scenes/world/toros_field.gd")
+const HUMMOCKS := preload("res://scenes/world/hummock_builder.gd")
+const RINK := preload("res://scenes/world/rink.gd")
 
 var river: IceRiver
 var rng: RandomNumberGenerator
@@ -47,32 +52,34 @@ func build(lake: IceRiver, random: RandomNumberGenerator) -> void:
 	var w := river.half_width
 
 	# ---------------- Каток ----------------
-	_scatter_snow(458.0, 492.0, 18)
-	for i in 4:
-		var d := _add(DEBRIS, "Debris", _free_spot(458.0, 485.0, 4.0))
+	var rink := Node3D.new()
+	rink.set_script(RINK)
+	rink.name = "Rink"
+	_pending.append(rink)
+	# у края катка — сугробы и обломки, середина чистая
+	_scatter_snow(766.0, 776.0, 14)
+	for i in 8:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var d := _add(DEBRIS, "Debris", Vector3(side * rng.randf_range(206.0, 219.0), 0.0, rng.randf_range(780.0, 905.0)))
 		d.kind = rng.randi_range(0, 3)
 		d.seed_value = _count
 
-	# ---------------- Торосы ----------------
-	_ridge(446.0, 0.7, 22.0, 32.0, 4.0, 0)
-	_ridge(428.0, 1.0, 24.0, 34.0, 3.5, 1)
-	_ridge(386.0, 0.8, 26.0, 36.0, 4.5, 0)     # внизу первого спуска — тормози заранее!
-	_scatter_snow(398.0, 452.0, 12)
-	_scatter_spikes(400.0, 450.0, 14, 3.0)
+	# ---------------- Ледяной лабиринт ----------------
+	var toros := Node3D.new()
+	toros.set_script(TOROS)
+	toros.name = "Toros"
+	toros.set("half_width", w)
+	_pending.append(toros)
+
+	# ---------------- Разломы ----------------
+	_scatter_snow(392.0, 515.0, 26)
+	_scatter_spikes(400.0, 512.0, 20, 3.0)
+	_hummock_row(386.0, 1.1, 24.0, 34.0, 4.5)   # внизу первого спуска — тормози заранее!
 
 	# ---------------- Вмёрзший корабль ----------------
 	var wreck_x := rng.randf_range(-20.0, 20.0)
 	var wreck := _add(WRECK, "Wreck", Vector3(wreck_x, IceRiver.river_y(361.0), 361.0))
 	wreck.seed_value = 4242
-	# Бонус: бортовой самописец у носа корабля
-	var box := PARCEL_SCENE.instantiate() as Parcel
-	box.name = "BlackBox"
-	box.display_name = "Бортовой самописец"
-	box.base_price = 300
-	box.fragility = 0.5
-	box.position = Vector3(wreck_x + 12.5, IceRiver.river_y(361.0) + 0.5, 358.0)
-	box.add_to_group("bonus")
-	_pending.append(box)
 	# Обломки и грузы по всей ширине
 	var dx := -w + 6.0
 	while dx < w - 6.0:
@@ -242,6 +249,24 @@ func _ridge(z: float, height: float, gap_min: float, gap_max: float, gap_width: 
 	ridge.seed_value = int(z * 13.0)
 	ridge.half_width = river.half_width
 	ridge.style = style
+
+
+## Низкая гряда торосов поперёк озера с проходами (можно и перепрыгнуть с разбега)
+func _hummock_row(z: float, height: float, gap_min: float, gap_max: float, gap_width: float) -> void:
+	var b = HUMMOCKS.new(int(z * 17.0))
+	b.ground_y = IceRiver.river_y(z) + 0.02
+	var w := river.half_width
+	var x := -w
+	while x < w:
+		var next := minf(x + rng.randf_range(gap_min, gap_max), w)
+		b.palette = rng.randi() % HUMMOCKS.PALETTES.size()
+		b.form = rng.randi() % HUMMOCKS.FORMS
+		b.wall(Vector2(x, z), Vector2(next - gap_width, z), height, 2.0)
+		x = next
+	var holder := Node3D.new()
+	holder.name = "HummockRow_%d" % int(z)
+	_pending.append(holder)
+	b.finish(holder)
 
 
 func _floe_lane(lane_z: float, seg_min: float, seg_max: float, period_min: float, period_max: float) -> void:

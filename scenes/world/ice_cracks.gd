@@ -60,7 +60,7 @@ func _ready() -> void:
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.custom_aabb = AABB(Vector3(-400, -50, -100), Vector3(800, 100, 800))
+		mmi.custom_aabb = AABB(Vector3(-400, -50, -100), Vector3(800, 100, 1100))
 		add_child(mmi)
 		_mms.append(mm)
 		_used.append(0)
@@ -78,7 +78,7 @@ func _ready() -> void:
 	var smi := MultiMeshInstance3D.new()
 	smi.multimesh = _stain_mm
 	smi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	smi.custom_aabb = AABB(Vector3(-400, -50, -100), Vector3(800, 100, 800))
+	smi.custom_aabb = AABB(Vector3(-400, -50, -100), Vector3(800, 100, 1100))
 	add_child(smi)
 
 

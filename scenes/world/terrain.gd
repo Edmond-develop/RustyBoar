@@ -2,10 +2,13 @@ class_name SnowTerrain
 extends StaticBody3D
 ## Процедурный рельеф снежной планеты «Борея».
 ## Высота в каждой точке = лёгкий шум + специально спланированные участки.
-## Тропа идёт с юга (z = +150, лагерь) на север (z = -200, станция) вдоль x ≈ 0.
+## Тропа идёт с юга (база на месте крушения) на север (z = -200, станция) вдоль x ≈ 0.
 ##
-##   z  525 … 497  Лагерь
-##   z  495 … 80   Огромное замёрзшее озеро на всю ширину (~400 м)
+##   z 1210 … 1020 База: инопланетный луг, разбитый корабль (место крушения ~ z 1110)
+##   z 1020 … 945  Переход: трава редеет, иней, сугробы
+##   z  945 … 917  Лагерь — контрольная точка Бореи
+##   z  915 … 80   Огромное замёрзшее озеро на всю ширину (~450 × 830 м),
+##                 первые 150 м — каток
 ##   z   72 … 8    Лавинный склон (гора на западе)
 ##   z   -2 … -40  Трещины (две пропасти поперёк пути)
 ##   z  -42 … -106 Плато бурь (обрывы по бокам)
@@ -14,8 +17,8 @@ extends StaticBody3D
 ##
 ## Чтобы поменять форму мира — правь функцию height_at().
 
-@export var size_x := 360.0
-@export var size_z := 750.0
+@export var size_x := 540.0
+@export var size_z := 1430.0
 @export var north_edge_z := -215.0
 @export var cell := 1.5
 @export var noise_seed := 7
@@ -24,9 +27,26 @@ extends StaticBody3D
 ## Трещины: (центр по z, полуширина)
 const CREVASSES := [Vector2(-12.0, 3.0), Vector2(-30.0, 3.5)]
 const CREVASSE_DEPTH := -30.0
-const RIVER_HALF := 150.0  ## Полуширина замёрзшего озера (как в ice_river.gd)
+const RIVER_HALF := 225.0  ## Полуширина замёрзшего озера (как в ice_river.gd)
 const LAKE_CENTER := Vector2(0.0, -175.0)
 const LAKE_RADIUS := Vector2(24.0, 17.0)
+## Место крушения: где лежит нос корабля, и откуда он прилетел (конец борозды)
+const CRASH_NOSE := Vector2(0.0, 1104.0)
+const CRASH_TAIL := Vector2(12.0, 1204.0)
+const BASE_START_Z := 950.0   ## Отсюда на юг начинается база (луг)
+const BASE_SPAWN := Vector2(8.0, 1084.0)   ## Где появляются дроны
+
+## Текстуры земли (нарисованы для игры: цвет + объём)
+const TEXTURES := {
+	"moss_tex": preload("res://assets/textures/terrain/moss_albedo.png"),
+	"moss_nrm": preload("res://assets/textures/terrain/moss_normal.png"),
+	"soil_tex": preload("res://assets/textures/terrain/soil_albedo.png"),
+	"soil_nrm": preload("res://assets/textures/terrain/soil_normal.png"),
+	"rock_tex": preload("res://assets/textures/terrain/rock_albedo.png"),
+	"rock_nrm": preload("res://assets/textures/terrain/rock_normal.png"),
+	"snow_tex": preload("res://assets/textures/terrain/snow_albedo.png"),
+	"snow_nrm": preload("res://assets/textures/terrain/snow_normal.png"),
+}
 
 var _noise := FastNoiseLite.new()
 var _big_noise := FastNoiseLite.new()
@@ -40,6 +60,14 @@ func _ready() -> void:
 	_noise.fractal_octaves = 3
 	_big_noise.seed = noise_seed + 1
 	_big_noise.frequency = 0.008
+	var sm := terrain_material as ShaderMaterial
+	if sm:
+		for key in TEXTURES:
+			sm.set_shader_parameter(key, TEXTURES[key])
+		sm.set_shader_parameter("crash_nose", CRASH_NOSE)
+		sm.set_shader_parameter("crash_tail", CRASH_TAIL)
+		sm.set_shader_parameter("meadow_start_z", BASE_START_Z + 15.0)
+		sm.set_shader_parameter("meadow_full_z", BASE_START_Z + 85.0)
 	_build()
 
 
@@ -53,11 +81,11 @@ func height_at(x: float, z: float) -> float:
 	h += maxf(_big_noise.get_noise_2d(x, z), 0.0) * 10.0 * smoothstep(20.0, 45.0, ax)
 
 	# Замёрзшее озеро: дно подо льдом и пологие берега далеко по краям
-	var wr := _band(z, 497.0, 80.0, 6.0)
+	var wr := _band(z, 917.0, 80.0, 6.0)
 	if wr > 0.0:
 		var ry := IceRiver.river_y(z)
 		# Вода только под льдом (с запасом от краёв) — у входа на лёд нет провала
-		var water := _band(z, 492.0, 93.0, 1.0)
+		var water := _band(z, 912.0, 93.0, 1.0)
 		var inside := 1.0 - smoothstep(RIVER_HALF - 1.0, RIVER_HALF + 1.0, ax)
 		var bed := ry - (IceRiver.WATER_GAP + IceRiver.lake_depth(x, z)) * water
 		var shore := ry + clampf((ax - RIVER_HALF) * 0.35, 0.0, 6.0)
@@ -94,13 +122,38 @@ func height_at(x: float, z: float) -> float:
 	h = lerpf(h, 0.0, 1.0 - smoothstep(1.0, 1.4, d))
 	h = lerpf(h, -6.0, 1.0 - smoothstep(0.98, 1.08, d))
 
+	# База: пологие холмы луга, ровная площадка у корабля и борозда от падения
+	var wbase := smoothstep(BASE_START_Z, BASE_START_Z + 60.0, z)
+	if wbase > 0.0:
+		h += _big_noise.get_noise_2d(x * 1.7 + 40.0, z * 1.7) * 2.6 * wbase * smoothstep(6.0, 26.0, ax)
+		var to_nose := Vector2(x, z).distance_to(CRASH_NOSE)
+		h = lerpf(h, 0.25, (1.0 - smoothstep(16.0, 30.0, to_nose)) * wbase)
+		h += _furrow(x, z) * wbase
+
 	# Горы по краям мира (слишком крутые, чтобы забраться)
-	var edge_start := lerpf(70.0, RIVER_HALF + 12.0, _band(z, 500.0, 84.0, 8.0))
+	var edge_start := lerpf(70.0, RIVER_HALF + 12.0, _band(z, 920.0, 84.0, 8.0))
 	var edge := clampf((ax - edge_start) * 1.5, 0.0, 45.0)
-	edge += clampf((z - 522.0) * 1.5, 0.0, 45.0)
+	edge += clampf((z - 1205.0) * 1.5, 0.0, 45.0)
 	edge += clampf((north_edge_z + 7.0 - z) * 1.5, 0.0, 45.0)
 	h += edge + edge * 0.15 * _big_noise.get_noise_2d(z * 2.0, x * 2.0)
 	return h
+
+
+## Борозда, которую корабль пропахал при падении: канава с валами земли по бокам,
+## у носа — вывороченный холм грунта.
+func _furrow(x: float, z: float) -> float:
+	var a := CRASH_NOSE
+	var b := CRASH_TAIL
+	var ab := b - a
+	var t := clampf((Vector2(x, z) - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	var d := Vector2(x, z).distance_to(a + ab * t)
+	var depth := lerpf(1.5, 0.3, t) * (1.0 - smoothstep(2.5, 4.5, d))
+	var berm := lerpf(0.9, 0.2, t) * smoothstep(3.5, 5.0, d) * (1.0 - smoothstep(5.5, 8.5, d))
+	var fade := smoothstep(1.0, 0.85, t)   # к дальнему концу борозда сходит на нет
+	# вал грунта перед носом
+	var front := Vector2(x, z).distance_to(a - ab.normalized() * 5.0)
+	var mound := 0.7 * (1.0 - smoothstep(1.5, 5.0, front))
+	return (berm - depth) * fade + mound
 
 
 ## 1 внутри диапазона z_lo…z_hi, плавно спадает до 0 за его краями.

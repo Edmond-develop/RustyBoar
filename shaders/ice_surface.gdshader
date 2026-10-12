@@ -15,7 +15,7 @@ uniform float base_alpha = 0.86;
 uniform float snow_edge_z = 495.0;   // южный край льда: там лёд присыпан снегом
 // Слабые участки (x, z, радиус) — их задаёт ice_river.gd. Едва заметны:
 // лёд там тоньше — темнее, прозрачнее, без инея, с тонкой паутинкой трещинок.
-uniform vec4 weak_spots[32];
+uniform vec4 weak_spots[64];
 // Карта глубины воды (0 — 2 м, 1 — 12 м), её строит ice_river.gd.
 // Над глубиной лёд почти чёрный, на мелководье светлее и сквозь него видно дно.
 uniform sampler2D depth_map : filter_linear, repeat_disable, hint_default_black;
@@ -106,7 +106,7 @@ void fragment() {
 
 	// Слабый лёд: тоньше — сквозь него сильнее видна тёмная вода
 	float weak = 0.0;
-	for (int i = 0; i < 32; i++) {
+	for (int i = 0; i < 64; i++) {
 		vec4 w = weak_spots[i];
 		if (w.z <= 0.0) {
 			continue;

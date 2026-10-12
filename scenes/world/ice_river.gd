@@ -1,6 +1,6 @@
 class_name IceRiver
 extends StaticBody3D
-## Огромное замёрзшее озеро — первый участок «Бореи» (~300 × 400 м).
+## Огромное замёрзшее озеро — первый участок «Бореи» (~450 × 830 м).
 ##
 ## Всё строится из кода по «зерну» layout_seed, поэтому у всех игроков в сети
 ## озеро и препятствия получаются одинаковыми.
@@ -26,8 +26,8 @@ extends StaticBody3D
 ## Лёд разбит на куски 30×30 м: при новой полынье перестраиваются только соседние куски.
 ## Высота льда зависит только от z — функция river_y(z) (её же использует рельеф).
 
-@export var half_width := 150.0
-@export var z_start := 495.0
+@export var half_width := 225.0
+@export var z_start := 915.0
 @export var z_end := 92.0
 @export var row := 0.5                 ## Шаг рядов сетки льда (меньше — круглее полыньи)
 @export var chunk_size := 30.0
@@ -42,7 +42,7 @@ extends StaticBody3D
 ## Риск провалиться, наступив на участок с N трещинами (N = номер в списке, 0 — свежий лёд)
 @export var crack_risk := PackedFloat32Array([0.0, 0.30, 0.60, 0.90, 0.95, 0.99, 1.0])
 @export var collapse_radius := 6.0     ## Радиус провала (6 м = круг ~12 м)
-@export var weak_spot_count := 25      ## Сколько слабых участков на озере
+@export var weak_spot_count := 45      ## Сколько слабых участков на озере
 @export var weak_spot_size := Vector2(3.0, 5.0)   ## Радиус слабого участка (м)
 @export var weak_risk := 0.7           ## Шанс провалиться на слабом участке с каждого шага
 @export var max_dynamic_holes := 150
@@ -58,7 +58,13 @@ const DEPTH_MAX := 12.0
 const WATER_GAP := 0.6        ## Насколько вода ниже льда (как water_depth)
 const CURRENT_SPEED := 0.3    ## Скорость течения подо льдом, м/с
 ## Где стоят жаровни: z (по x ищем ближайший к тропе крепкий лёд)
-const HEATER_Z := [500.0, 478.0, 400.0, 330.0, 245.0, 170.0, 100.0]
+const HEATER_Z := [920.0, 900.0, 505.0, 478.0, 400.0, 330.0, 245.0, 170.0, 100.0]
+## Каток и Ледяной лабиринт: толстый старый лёд — не трескается и не проваливается
+const TOROS_Z := Vector2(518.0, 916.0)
+## Размеры озера для статических функций (как half_width / z_start / z_end)
+const LAKE_HALF := 225.0
+const LAKE_Z_START := 915.0
+const LAKE_Z_END := 92.0
 
 static var _depth_noise: FastNoiseLite
 const CRACKS := preload("res://scenes/world/ice_cracks.gd")
@@ -115,7 +121,7 @@ static func _noise() -> FastNoiseLite:
 static func lake_depth(x: float, z: float) -> float:
 	var n := _noise().get_noise_2d(x, z) * 0.5 + 0.5
 	var t := smoothstep(0.32, 0.68, n)
-	var edge := minf(minf(150.0 - absf(x), 495.0 - z), z - 92.0)
+	var edge := minf(minf(LAKE_HALF - absf(x), LAKE_Z_START - z), z - LAKE_Z_END)
 	t *= smoothstep(0.0, 30.0, edge)
 	return lerpf(DEPTH_MIN, DEPTH_MAX, t)
 
@@ -215,6 +221,9 @@ func _ready() -> void:
 	_build_ice()
 	_build_water()
 	_make_depth_map()
+	var sm := ice_material as ShaderMaterial
+	if sm:
+		sm.set_shader_parameter("snow_edge_z", z_start)
 
 	_crack_fx = CRACKS.new()
 	_crack_fx.name = "Cracks"
@@ -364,6 +373,8 @@ func _generate_weak_spots() -> void:
 		var r := rng.randf_range(weak_spot_size.x, weak_spot_size.y)
 		var x := rng.randf_range(-half_width + r + 2.0, half_width - r - 2.0)
 		var z := rng.randf_range(z_end + r + 4.0, z_start - 18.0)   # у лагеря лёд крепкий
+		if z > TOROS_Z.x - r - 4.0 and z < TOROS_Z.y + r + 4.0:
+			continue   # в Торосах лёд толстый
 		if is_hole(x, z, r + 2.0):
 			continue
 		var ok := true
@@ -378,7 +389,7 @@ func _generate_weak_spots() -> void:
 		var arr := PackedVector4Array()
 		for w in weak_spots:
 			arr.append(Vector4(w.x, w.y, w.z, 0.0))
-		while arr.size() < 32:
+		while arr.size() < 64:
 			arr.append(Vector4(0, 0, 0, 0))
 		sm.set_shader_parameter("weak_spots", arr)
 
@@ -397,7 +408,8 @@ func _server_wear() -> void:
 		var cell := _cell_of(d.global_position)
 		if _drone_cell.get(d, Vector2i(2147483647, 0)) == cell:
 			continue
-		if near_heater(d.global_position.x, d.global_position.z):
+		var dz: float = d.global_position.z
+		if near_heater(d.global_position.x, dz) or (dz > TOROS_Z.x and dz < TOROS_Z.y):
 			_drone_cell[d] = cell
 			continue
 		_drone_cell[d] = cell
@@ -494,10 +506,10 @@ func _open_hole_area(x: float, z: float, radius: float) -> void:
 func _generate_holes(rng: RandomNumberGenerator) -> void:
 	var w := half_width
 
-	# Торосы: редкие небольшие полыньи между грядами
-	for i in 12:
-		var z := rng.randf_range(398.0, 452.0)
-		if absf(z - 446.0) < 4.0 or absf(z - 428.0) < 4.0:
+	# Разломы (после Ледяного вала): редкие небольшие полыньи
+	for i in 30:
+		var z := rng.randf_range(392.0, 508.0)
+		if absf(z - 386.0) < 5.0:
 			continue
 		circles.append(Vector3(rng.randf_range(-w + 5.0, w - 5.0), z, rng.randf_range(1.5, 2.8)))
 

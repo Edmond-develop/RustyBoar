@@ -124,4 +124,4 @@ func _physics_process(delta: float) -> void:
 			var flat := Vector2(p.x - global_position.x, p.z - global_position.z).length()
 			if flat < radius * 1.1 and p.y < global_position.y + 2.5:
 				_blasted = true
-				me.launch(launch_speed, damage, 0.6, 5.0, true)
+				me.launch(launch_speed, damage, 0.6, 5.0, true, "scald")

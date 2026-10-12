@@ -97,5 +97,5 @@ func _physics_process(delta: float) -> void:
 				dir.y = 0.0
 				if dir.length() < 0.1:
 					dir = Vector3.RIGHT.rotated(Vector3.UP, randf() * TAU)
-				body.receive_hit(dir.normalized(), hit_strength, global_position + Vector3.UP * 0.5)
+				body.receive_hit(dir.normalized(), hit_strength, global_position + Vector3.UP * 0.5, "pierce")
 				_hit_this_cycle = true

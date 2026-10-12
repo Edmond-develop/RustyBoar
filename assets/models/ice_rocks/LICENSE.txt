@@ -1,0 +1,4 @@
+Модели скал — Quaternius (https://quaternius.com):
+  Stylized Nature MegaKit (nature_rock_*.glb) и Ultimate Space Kit (space_rock_*.glb).
+Лицензия: CC0 1.0 (общественное достояние) — можно использовать как угодно, в том числе в платной игре.
+Для «Ржавого Борова» материалы и текстуры из моделей убраны: лёд рисует шейдер shaders/pressure_ice.gdshader.

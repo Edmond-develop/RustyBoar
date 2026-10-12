@@ -67,7 +67,7 @@ func _ready() -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = _mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mmi.custom_aabb = AABB(Vector3(-400, -60, -100), Vector3(800, 120, 800))
+	mmi.custom_aabb = AABB(Vector3(-400, -60, -100), Vector3(800, 120, 1100))
 	mmi.top_level = true
 	add_child(mmi)
 	_mm_instance = mmi
