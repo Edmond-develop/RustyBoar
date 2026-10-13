@@ -195,6 +195,23 @@ func _set_tile_stage(key: Vector2i, stage: int) -> void:
 	(t["mesh"] as MeshInstance3D).material_override = mats[stage]
 
 
+## Сломать плитку в точке — например, снизу в неё упёрлась глыба, которую тянут верёвкой
+func request_break_at(world_pos: Vector3) -> void:
+	var key := _tile_key_at(world_pos)
+	if not _tiles.has(key) or _tiles[key]["broken"]:
+		return
+	if multiplayer.is_server():
+		_break_tile.rpc(key)
+	else:
+		_rpc_request_break.rpc_id(1, key)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_break(key: Vector2i) -> void:
+	if multiplayer.is_server() and _tiles.has(key) and not _tiles[key]["broken"]:
+		_break_tile.rpc(key)
+
+
 @rpc("authority", "call_local", "reliable")
 func _break_tile(key: Vector2i) -> void:
 	if not _tiles.has(key):

@@ -49,12 +49,14 @@ extends StaticBody3D
 
 const SKIRT := 0.35
 const COLLAPSE := preload("res://scenes/world/ice_collapse.gd")
+const COLLAPSE_WARN := 0.45     ## Сколько лёд трещит паутиной, прежде чем провалиться
+var _pending_breaks: Array[Vector3] = []    ## провалы «в процессе» (x, z, радиус)
 const UNDERWATER := preload("res://scenes/world/underwater_fx.gd")
 const HEATER := preload("res://scenes/world/heat_source.gd")
 
 ## Глубина воды (от поверхности воды до дна), м
-const DEPTH_MIN := 2.0
-const DEPTH_MAX := 12.0
+const DEPTH_MIN := 3.0
+const DEPTH_MAX := 16.0
 const WATER_GAP := 0.6        ## Насколько вода ниже льда (как water_depth)
 const CURRENT_SPEED := 0.3    ## Скорость течения подо льдом, м/с
 ## Где стоят жаровни: z (по x ищем ближайший к тропе крепкий лёд)
@@ -67,6 +69,11 @@ const LAKE_Z_START := 915.0
 const LAKE_Z_END := 92.0
 
 static var _depth_noise: FastNoiseLite
+## Сильные подводные течения: «реки» подо льдом от одной полыньи к другой.
+## [ax, az, bx, bz, ширина, скорость]. Одинаковы у всех (строятся по зерну).
+static var streams: Array = []
+const UNDERWATER_STREAMS := preload("res://scenes/world/lake_streams.gd")
+const LAKE_BED := preload("res://scenes/world/lake_bed.gd")
 const CRACKS := preload("res://scenes/world/ice_cracks.gd")
 
 ## Полыньи (заполняются в _generate_holes и при проломах)
@@ -129,6 +136,73 @@ static func lake_depth(x: float, z: float) -> float:
 ## Высота дна озера
 static func bed_y(x: float, z: float) -> float:
 	return river_y(z) - WATER_GAP - lake_depth(x, z)
+
+
+## Сильные течения: от полыньи A к соседней полынье B (16–34 м), подо льдом.
+## Упал в такую полынью — утащит под лёд и вынесет к следующей.
+func _generate_streams() -> void:
+	streams.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = layout_seed + 4242
+	var cand: Array[Vector3] = []
+	for c in circles:
+		if c.y > 250.0 and c.y < 520.0 and c.z >= 1.5 and absf(c.x) < half_width - 20.0:
+			cand.append(c)
+	var used := {}
+	var tries := 0
+	while streams.size() < 12 and tries < 400 and cand.size() > 2:
+		tries += 1
+		var ai := rng.randi() % cand.size()
+		if used.has(ai):
+			continue
+		var a: Vector3 = cand[ai]
+		var best := -1
+		for bi in cand.size():
+			if bi == ai or used.has(bi):
+				continue
+			var b: Vector3 = cand[bi]
+			var dist := Vector2(b.x - a.x, b.y - a.y).length()
+			if dist > 16.0 + a.z and dist < 34.0 and rng.randf() < 0.5:
+				best = bi
+				break
+		if best < 0:
+			continue
+		var bb: Vector3 = cand[best]
+		used[ai] = true
+		used[best] = true
+		streams.append([a.x, a.y, bb.x, bb.y, rng.randf_range(5.5, 7.5), rng.randf_range(2.8, 3.6)])
+
+
+## Сильное течение в точке (м/с) — только внутри «рек» подо льдом
+static func stream_at(x: float, z: float) -> Vector3:
+	var v := Vector3.ZERO
+	for s in streams:
+		var ax: float = s[0]
+		var az: float = s[1]
+		var dx: float = s[2] - ax
+		var dz: float = s[3] - az
+		var L := sqrt(dx * dx + dz * dz)
+		if L < 0.1:
+			continue
+		var nx := dx / L
+		var nz := dz / L
+		var px := x - ax
+		var pz := z - az
+		var t := px * nx + pz * nz
+		if t < -3.0 or t > L + 2.0:
+			continue
+		var lx := px - nx * t
+		var lz := pz - nz * t
+		var d := sqrt(lx * lx + lz * lz)
+		var w: float = s[4]
+		if d > w:
+			continue
+		var k := (1.0 - smoothstep(w * 0.55, w, d)) * smoothstep(-3.0, 1.0, t) * (1.0 - smoothstep(L - 3.0, L + 1.5, t))
+		var sp: float = s[5]
+		v += Vector3(nx, 0.0, nz) * sp * k
+		if d > 0.01:
+			v -= Vector3(lx / d, 0.0, lz / d) * 0.5 * k * (d / w)   # затягивает в середину струи
+	return v
 
 
 ## Течение подо льдом в точке (горизонтальная скорость, м/с)
@@ -218,6 +292,7 @@ func _ready() -> void:
 	rng.seed = layout_seed
 	_generate_holes(rng)
 	_generate_weak_spots()
+	_generate_streams()
 	_build_ice()
 	_build_water()
 	_make_depth_map()
@@ -238,6 +313,14 @@ func _ready() -> void:
 	uw.set_script(UNDERWATER)
 	uw.name = "Underwater"
 	add_child(uw)
+	var st := Node3D.new()
+	st.set_script(UNDERWATER_STREAMS)
+	st.name = "Streams"
+	add_child(st)
+	var bed := Node3D.new()
+	bed.set_script(LAKE_BED)
+	bed.name = "LakeBed"
+	add_child(bed)
 	_place_heaters.call_deferred()
 
 
@@ -252,8 +335,12 @@ func _make_depth_map() -> void:
 	var img := Image.create(w, h, false, Image.FORMAT_R8)
 	for j in h:
 		for i in w:
-			var d := lake_depth(-half_width + i * step, z_end + j * step)
-			img.set_pixel(i, j, Color((d - DEPTH_MIN) / (DEPTH_MAX - DEPTH_MIN), 0, 0))
+			var px := -half_width + i * step
+			var pz := z_end + j * step
+			var d := lake_depth(px, pz)
+			# над сильным течением лёд промыт снизу — темнее (видно «тёмную реку» между полыньями)
+			var k := clampf((d - DEPTH_MIN) / (DEPTH_MAX - DEPTH_MIN) + stream_at(px, pz).length() * 0.35, 0.0, 1.0)
+			img.set_pixel(i, j, Color(k, 0, 0))
 	sm.set_shader_parameter("depth_map", ImageTexture.create_from_image(img))
 	sm.set_shader_parameter("depth_rect", Vector4(-half_width - step * 0.5, z_end - step * 0.5, w * step, h * step))
 
@@ -456,6 +543,9 @@ func _rpc_request_break(x: float, z: float, radius: float) -> void:
 func _server_break(x: float, z: float, radius: float) -> void:
 	if _dynamic_holes >= max_dynamic_holes:
 		return
+	for pb in _pending_breaks:
+		if Vector2(pb.x - x, pb.y - z).length() < pb.z + radius:
+			return      # тут уже трещит — второй провал не нужен
 	if absf(x) > half_width - 1.0 or z > z_start - 3.0 or z < z_end + 1.0:
 		return
 	if near_heater(x, z, radius):
@@ -470,19 +560,37 @@ func _server_break(x: float, z: float, radius: float) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _collapse(x: float, z: float, radius: float, seed_value: int) -> void:
+	# сначала — паутина трещин и дрожь (COLLAPSE_WARN), потом лёд проваливается
 	_dynamic_holes += 1
-	circles.append(Vector3(x, z, radius))
-	_open_hole_area(x, z, radius)
-	_crack_fx.clear_circle(x, z, radius, crack_cell)
-	_crack_fx.add_rim_cracks(x, z, radius, seed_value)
-
+	_pending_breaks.append(Vector3(x, z, radius))
 	var fx := Node3D.new()
 	fx.set_script(COLLAPSE)
 	fx.set("radius", radius)
 	fx.set("seed_value", seed_value)
+	fx.set("warn", COLLAPSE_WARN)
 	fx.position = Vector3(x, river_y(z) + 0.02, z)
 	add_child(fx)
+	for d in get_tree().get_nodes_in_group("player"):
+		var dd := Vector2(d.global_position.x - x, d.global_position.z - z).length()
+		if dd < radius + 0.5 and d.has_method("ice_warning"):
+			d.ice_warning(Vector3(x, river_y(z), z))
+	var me = Network.local_player
+	if me:
+		var dist := Vector2(me.global_position.x - x, me.global_position.z - z).length()
+		if dist < radius + 12.0:
+			me.add_shake(clampf(0.18 - dist * 0.01, 0.05, 0.18))
+	get_tree().create_timer(COLLAPSE_WARN, true, true).timeout.connect(_open_collapse.bind(x, z, radius, seed_value))
 
+
+func _open_collapse(x: float, z: float, radius: float, seed_value: int) -> void:
+	for i in range(_pending_breaks.size() - 1, -1, -1):
+		var pb: Vector3 = _pending_breaks[i]
+		if is_equal_approx(pb.x, x) and is_equal_approx(pb.y, z):
+			_pending_breaks.remove_at(i)
+	circles.append(Vector3(x, z, radius))
+	_open_hole_area(x, z, radius)
+	_crack_fx.clear_circle(x, z, radius, crack_cell)
+	_crack_fx.add_rim_cracks(x, z, radius, seed_value)
 	var me = Network.local_player
 	if me:
 		var dist := Vector2(me.global_position.x - x, me.global_position.z - z).length()

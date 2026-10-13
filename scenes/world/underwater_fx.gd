@@ -15,8 +15,8 @@ const SHAFT_RANGE := 34.0     ## На каком расстоянии от ка�
 const SHAFT_STEP := 2.2       ## Шаг сетки столбов внутри полыньи
 const SHAFT_MAX := 320
 
-const SHALLOW_FOG := Color(0.17, 0.38, 0.42)
-const DEEP_FOG := Color(0.015, 0.06, 0.085)
+const SHALLOW_FOG := Color(0.12, 0.29, 0.33)
+const DEEP_FOG := Color(0.014, 0.05, 0.068)
 
 var _lake: Node
 var _cam: Camera3D
@@ -92,10 +92,14 @@ func _process(delta: float) -> void:
 	depth01 = clampf(depth / IceRiver.DEPTH_MAX, 0.0, 1.0)
 	var fog := SHALLOW_FOG.lerp(DEEP_FOG, pow(depth01, 0.7))
 	# Солнце сквозь лёд почти не пробивается: подо льдом темно, в полынье светлее
-	var light := lerpf(0.85, 0.45, depth01)
+	var light := lerpf(0.8, 0.45, depth01)
 	if not _lake.is_hole(p.x, p.z):
-		fog = fog.darkened(0.25)
-		light *= 0.8
+		# подо льдом сумрачно: выход проще всего найти по столбам света
+		fog = fog.darkened(0.35)
+		light *= 0.72
+	# в струе течения вода мутная — видно ещё хуже
+	var murk := clampf(IceRiver.stream_at(p.x, p.z).length() / 3.0, 0.0, 1.0)
+	_uw_env.fog_depth_end = lerpf(_uw_env.fog_depth_end, lerpf(5.2, 3.2, murk), clampf(delta * 2.0, 0.0, 1.0))
 	var k := clampf(delta * 3.0, 0.0, 1.0)
 	_uw_env.fog_light_color = _uw_env.fog_light_color.lerp(fog, k)
 	_uw_env.adjustment_brightness = lerpf(_uw_env.adjustment_brightness, light, k)
@@ -150,8 +154,8 @@ func _make_env() -> Environment:
 	var env: Environment = base.duplicate() if base else Environment.new()
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 0.6
-	env.fog_depth_end = 7.5
+	env.fog_depth_begin = 0.4
+	env.fog_depth_end = 5.2
 	env.fog_depth_curve = 1.6
 	env.fog_light_energy = 1.0
 	env.fog_sun_scatter = 0.0
@@ -197,7 +201,7 @@ func _update_shafts(cam_pos: Vector3) -> void:
 				if not _inside(x, z, near_c, near_r):
 					continue
 				var top: float = _lake.water_y(z)
-				var height := minf(IceRiver.lake_depth(x, z), 9.0) * (0.75 + 0.25 * h.z)
+				var height := minf(IceRiver.lake_depth(x, z), 12.0) * (0.75 + 0.25 * h.z)
 				var width := SHAFT_STEP * (0.9 + 0.7 * h.z)
 				var b := Basis.from_scale(Vector3(width, height, 1.0))
 				_mm.set_instance_transform(n, Transform3D(b, Vector3(x, top, z)))

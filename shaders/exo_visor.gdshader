@@ -8,7 +8,8 @@ render_mode blend_mix, depth_draw_opaque, cull_back, specular_schlick_ggx;
 uniform float radius = 0.2;
 uniform vec3 eye_color : source_color = vec3(0.4, 0.9, 1.0);
 uniform float power = 1.0;
-uniform int mood = 0;               // 0 — обычный, 1 — радость, 2 — больно, 3 — устал, 4 — выключен
+uniform int mood = 0;               // 0 — обычный, 1 — радость, 2 — больно, 3 — устал, 4 — выключен,
+                                    // 5 — паника, 6 — сосредоточен (чинит), 7 — голова кружится
 uniform float blink = 0.0;          // 0 — открыты, 1 — закрыты
 uniform vec2 look = vec2(0.0);      // куда смотрят глаза (смещение)
 uniform float cracks = 0.0;
@@ -52,8 +53,27 @@ float rbox(vec2 p, vec2 b, float r) {
 	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
-float eye_shape(vec2 p) {
-	// p — координаты относительно центра глаза (в долях высоты визора)
+float eye_shape(vec2 p, float side) {
+	// p — координаты относительно центра глаза (в долях высоты визора), side — левый (-1) / правый (1)
+	if (mood == 5) {
+		// паника: круглые глаза-кольца, зрачки мечутся
+		vec2 j = vec2(sin(TIME * 23.0 + side * 2.0), cos(TIME * 19.0 + side)) * 0.025;
+		float ring = abs(length(p) - 0.115) - 0.022;
+		float pupil = length(p - j) - 0.035;
+		return min(ring, pupil);
+	} else if (mood == 6) {
+		// сосредоточен: прищур, внутренние уголки опущены
+		vec2 q = p;
+		q.y -= q.x * side * 0.55;
+		return rbox(q, vec2(0.085, 0.045), 0.03);
+	} else if (mood == 7) {
+		// голова кружится: глаза-спирали
+		float r = length(p);
+		float a = atan(p.y, p.x) * side;
+		float v = r * 34.0 - (a + TIME * 9.0) / 6.2832;
+		float d = abs(fract(v) - 0.5) / 34.0 - 0.0045;
+		return (r < 0.14) ? d : 1.0;
+	}
 	if (mood == 1) {
 		// дуга «^»
 		float d = abs(length(p - vec2(0.0, -0.09)) - 0.13) - 0.035;
@@ -93,10 +113,10 @@ void fragment() {
 	if (mood != 4) {
 		vec2 c = vec2(0.36, 0.02) ;
 		vec2 lk = look * vec2(0.18, 0.12);
-		float dl = eye_shape(vec2(e.x + c.x, e.y - c.y) - lk);
-		float dr = eye_shape(vec2(e.x - c.x, e.y - c.y) - lk);
+		float dl = eye_shape(vec2(e.x + c.x, e.y - c.y) - lk, -1.0);
+		float dr = eye_shape(vec2(e.x - c.x, e.y - c.y) - lk, 1.0);
 		if (mood == 2) {
-			dr = eye_shape(vec2(-(e.x - c.x), e.y - c.y) - lk);
+			dr = eye_shape(vec2(-(e.x - c.x), e.y - c.y) - lk, 1.0);
 		}
 		float d = min(dl, dr);
 		float eye = 1.0 - smoothstep(-0.005, 0.012, d);

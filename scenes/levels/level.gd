@@ -6,9 +6,8 @@ extends Node3D
 ## Цель пока одна — исследовать Борею; поиск деталей корабля появится позже.
 ## Если в сцене уже стоит узел "Player" (старые тестовые уровни) — используется он.
 ##
-## ВРЕМЕННО, для проверки командных испытаний одному: «+» на цифровой клавиатуре
-## зовёт летающего бота-помощника (до 3), «−» отпускает последнего. Боты есть только у хоста.
-## Другие инструменты проверки (локации по «=», боты-курьеры, тестовые грузы) — test_tools.gd.
+## ВРЕМЕННО, для проверки одному: боты-курьеры в скафандрах («+»/«−», панель B,
+## G — переселиться в бота), локации по «=», тестовые грузы — всё в test_tools.gd.
 
 @export var ambient_snow := false
 @export var spawn_point := Vector3(0, 1, 0)
@@ -17,9 +16,7 @@ extends Node3D
 @export var objective := "Исследуй Борею — на севере за ледяным озером"
 @export var player_scene: PackedScene = preload("res://scenes/player/player.tscn")
 
-const HELPER_BOT := preload("res://scenes/bots/helper_bot.gd")
 const TEST_TOOLS := preload("res://scenes/levels/test_tools.gd")
-const MAX_BOTS := 3
 
 @onready var objective_label: Label = get_node_or_null("LevelHUD/Top/Objective")
 @onready var info_label: Label = get_node_or_null("LevelHUD/Top/Info")
@@ -97,55 +94,17 @@ func _process(delta: float) -> void:
 	_update_hud()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("bot_add"):
-		_add_bot()
-	elif event.is_action_pressed("bot_remove"):
-		_remove_bot()
-
-
-## Позвать бота-помощника (временная функция для проверки)
+## Боты-курьеры (раньше тут были летающие дроны-помощники) — в test_tools.gd
 func _add_bot() -> void:
-	if not multiplayer.is_server():
-		show_banner("Бот-помощник", "Звать ботов может только хост")
-		return
-	var bots := get_tree().get_nodes_in_group("coop_helper")
-	if bots.size() >= MAX_BOTS or player == null:
-		show_banner("Ботов хватит", "Больше %d помощников не бывает. «−» — отпустить" % MAX_BOTS)
-		return
-	var used := {}
-	for b in bots:
-		used[int(b.get("index"))] = true
-	var idx := 1
-	while used.has(idx):
-		idx += 1
-	var bot := Node3D.new()
-	bot.set_script(HELPER_BOT)
-	bot.set("index", idx)
-	bot.name = "HelperBot%d" % idx
-	add_child(bot)
-	var right: Vector3 = player.global_basis.x
-	bot.global_position = player.global_position + right * 2.0 + Vector3.UP * 3.0
-	show_banner("Бот-помощник %d прилетел" % idx, "Следует за тобой и сам встаёт на свободные посты.  «−» — отпустить")
+	var tools := get_node_or_null("TestTools")
+	if tools:
+		tools.add_courier()
 
 
-## Отпустить последнего бота
 func _remove_bot() -> void:
-	var bots := get_tree().get_nodes_in_group("coop_helper")
-	if bots.is_empty():
-		return
-	var last: Node3D = bots[0]
-	for b in bots:
-		if int(b.get("index")) > int(last.get("index")):
-			last = b
-	for g in get_tree().get_nodes_in_group("coop_gate"):
-		g.bot_release(last)
-	last.remove_from_group("coop_helper")
-	last.set_physics_process(false)
-	last.call("say", HELPER_BOT.LINES_BYE.pick_random())
-	var tw := create_tween()
-	tw.tween_property(last, "global_position", last.global_position + Vector3.UP * 25.0, 1.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_callback(last.queue_free)
+	var tools := get_node_or_null("TestTools")
+	if tools:
+		tools.remove_courier()
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")

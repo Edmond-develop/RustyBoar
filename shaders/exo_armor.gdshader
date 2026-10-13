@@ -7,6 +7,9 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 //      1 — вмятина: ямка, содранная до металла краска, царапины;
 //      2 — пробоина: дырка с рваными краями, внутри искрит;
 //      3 — ошпарило паром: жёлто-бурые разводы;
+//      4 — царапины (столкновения): борозды до блестящего металла;
+//      5 — следы мороза (после глыбы): краска потрескалась сеткой и отслоилась;
+//      6 — смято давлением: складки-морщины;
 //  * снег налипает сверху, мокрый корпус темнее и блестит.
 
 uniform vec3 base_color : source_color = vec3(0.86, 0.45, 0.17);
@@ -123,12 +126,49 @@ void fragment() {
 			col = mix(col, vec3(0.01), hole * str);
 			r = mix(r, 1.0, hole * str);
 			emis += vec3(1.0, 0.55, 0.15) * hole * str * (0.3 + si.y * 2.0);
-		} else {
+		} else if (kind == 3) {
 			float sc = (1.0 - smoothstep(0.3, 1.2, d)) * str;
 			float blot = smoothstep(0.4, 0.7, noise3(lp * (14.0 / rad) * 0.1 + si.w));
 			col = mix(col, mix(vec3(0.78, 0.64, 0.36), vec3(0.46, 0.38, 0.3), blot), sc * 0.65);
 			r = mix(r, 0.75, sc * 0.5);
 			m = mix(m, 0.3, sc * 0.5);
+		} else if (kind == 4) {
+			// царапины: пучок параллельных борозд вдоль удара, краска содрана до блестящего металла
+			vec3 axis = normalize(vec3(cos(si.w), sin(si.w * 1.7) * 0.5, sin(si.w)));
+			float along = dot(q, axis);
+			vec3 side = normalize(cross(axis, vec3(0.2, 1.0, 0.3)));
+			float across = dot(q, side);
+			float ell = length(vec2(along / (rad * 1.7), across / (rad * 0.55)));
+			float mask = (1.0 - smoothstep(0.6, 1.05, ell + jitter * 0.4)) * str;
+			float lines = noise3(vec3(across * (55.0 / rad) * 0.1, along * 0.4, si.w));
+			float groove = smoothstep(0.56, 0.64, lines) * mask;
+			float edge = smoothstep(0.5, 0.56, lines) * (1.0 - smoothstep(0.64, 0.72, lines)) * mask;
+			col = mix(col, steel * 1.12, groove);
+			col = mix(col, col * 0.55, edge * 0.6);
+			m = mix(m, 0.95, groove);
+			r = mix(r, 0.22, groove);
+			h -= groove * 0.0015;
+		} else if (kind == 5) {
+			// следы мороза: краска потрескалась сеткой, побелела и местами отслоилась
+			float fm = (1.0 - smoothstep(0.35, 1.25, d)) * str;
+			float cr = 1.0 - smoothstep(0.0, 0.05, abs(noise3(lp * (16.0 / rad) * 0.12 + si.w) - 0.5));
+			float cr2 = 1.0 - smoothstep(0.0, 0.04, abs(noise3(lp * (34.0 / rad) * 0.12 + si.w * 2.0) - 0.5));
+			float flake = smoothstep(0.62, 0.7, noise3(lp * (10.0 / rad) * 0.15 + si.w * 3.0));
+			col = mix(col, vec3(0.8, 0.88, 0.95), fm * 0.38);
+			col = mix(col, steel * 0.9, flake * fm * 0.8);
+			col = mix(col, vec3(0.22, 0.27, 0.33), max(cr, cr2 * 0.7) * fm * 0.75);
+			r = mix(r, 0.7, fm * 0.5);
+			emis += vec3(0.25, 0.4, 0.55) * step(0.97, noise3(lp * 90.0)) * fm * 0.4;   // искорки инея в трещинах
+		} else {
+			// смято давлением: складки-морщины, на гребнях краска стёрта
+			vec3 axis2 = normalize(vec3(sin(si.w), 0.4, cos(si.w)));
+			float wr = sin(dot(q, axis2) * (22.0 / rad) + noise3(lp * (7.0 / rad) * 0.2 + si.w) * 5.0);
+			float cm = (1.0 - smoothstep(0.1, 1.25, d)) * str;
+			h += wr * cm * 0.006 - cm * 0.01;
+			col *= 1.0 - cm * 0.18 * (0.5 - wr * 0.5);
+			float ridge = smoothstep(0.75, 1.0, wr) * cm;
+			col = mix(col, steel, ridge * 0.7);
+			m = mix(m, 0.9, ridge * 0.7);
 		}
 	}
 

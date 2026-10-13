@@ -3,12 +3,13 @@ extends Node
 ## как у игроков (узел "Brain" внутри дрона). Есть только у хоста.
 ## Бот «жмёт кнопки» сам: ходит, бегает, прыгает, берёт грузы, кидает верёвку.
 ##
-## Команды (клавиши 1–6, всем ботам сразу):
-##  1 — за мной;  2 — стой тут;  3 — помоги нести (берётся за тяжёлый ящик с другой
-##  стороны);  4 — прыгай в полынью (и зови на помощь — тренируй спасение);
-##  5 — подними меня и кинь;  6 — иди туда, куда я смотрю.
+## Команды — панель ботов (B) или клавиши 1–6 (выбранному боту):
+##  за мной · стой тут · иди ко мне · иди туда, куда смотрю · помоги нести ·
+##  прыгай в полынью (и зови на помощь) · подними меня и кинь · без сил (обмякни) ·
+##  замёрзни в глыбу.  G — переселиться в бота и управлять им самому.
 ## Сам по себе: если ты в воде — бежит спасать (рукой с края или верёвкой);
-## если тащишь тяжёлый ящик один — подходит и берётся за другой конец.
+## если тащишь тяжёлый ящик один — подходит и берётся за другой конец;
+## у Ледяного вала — сам встаёт в луч маяка (помогает с «Живыми зеркалами»).
 
 const LINES := {
 	"hello": ["Курьер на связи!", "Бот прибыл. Где груз?", "Готов работать!"],
@@ -24,6 +25,13 @@ const LINES := {
 	"rescue": ["Держись, вытащу!", "Сейчас, сейчас!", "Хватай руку!"],
 	"no_hole": ["Полыньи рядом нет.", "Тут не во что нырнуть."],
 	"thanks": ["Спасибо! Брр…", "Спас! С меня запчасть.", "Ух, живой!"],
+	"come": ["Бегу!", "Уже иду!", "Тут я, тут!"],
+	"faint": ["Всё… сил нет…", "Я полежу…", "Батарейка на нуле…"],
+	"freeze": ["Брррр…", "Хо-хо-холодно…", "Застыва-а-аю…"],
+	"gate": ["Встаю в луч!", "Отражу куда надо!", "Горячо, но держусь!"],
+	"wait": ["Жду спасения!", "Я тут побарахтаюсь…"],
+	"repair": ["Держись, прикручу!", "Сейчас как новенький будешь!", "Где тут резьба…", "Крути-верти!"],
+	"iced": ["Разбей лёд! Жми R рядом!", "Я в глыбе… выручай!", "Брр… постучи по мне!", "Катни меня к жаровне!"],
 }
 
 var bot: CharacterBody3D          ## дрон бота (player.gd)
@@ -67,6 +75,10 @@ func set_command(cmd: String, point := Vector3.INF) -> void:
 	_phase_t = 0.0
 	_water_spot = Vector3.INF
 	_was_wet = false
+	bot.downed = cmd == "faint"
+	if cmd == "freeze" and not bot.is_frozen:
+		bot.frost = bot.frost_max
+		bot._freeze_solid()
 	if cmd != "carry" and bot.held_parcel != null:
 		bot.bot_press("interact")        # отпустить груз
 	if bot.rope.state != bot.rope.S.NONE:
@@ -92,17 +104,37 @@ func _owner() -> Node3D:
 	return Network.local_player as Node3D
 
 
+## Человек отдал управление обратно: в воде — ждём спасения, иначе стоим
+func on_released() -> void:
+	if bot.is_swimming or bot.is_diving:
+		command = "water"
+		_was_wet = true
+		say("wait")
+	else:
+		command = "stay"
+	_phase_t = 0.0
+
+
 func _physics_process(delta: float) -> void:
+	if bot.controlled:
+		return
 	bot.bot_held.clear()
 	bot.bot_move = Vector2.ZERO
 	calling_help = false
 	_jump_cool -= delta
+	# брошенная верёвка лежит — сматываем (ПКМ)
+	if bot.rope.state == bot.rope.S.LYING or bot.rope.state == bot.rope.S.RETURN:
+		bot.bot_held["use_alt"] = true
 	var o := _owner()
-	if o == null or bot.is_dead or bot.carried_by != null or bot.rescue_role != 0 or bot.is_frozen:
-		if bot.is_frozen:
-			# вмёрз — ломаем лёд кнопками
-			if Engine.get_physics_frames() % 9 == 0:
-				bot.bot_press("jump")
+	if o == bot:
+		return
+	if o == null or bot.is_dead or bot.carried_by != null or bot.rescue_role != 0 or bot.is_frozen or bot.downed:
+		if bot.is_frozen and _bubble_t <= 0.0 and randf() < 0.008:
+			# изнутри лёд не разбить — зовём на помощь
+			say("iced")
+		if command == "freeze" and not bot.is_frozen:
+			command = "follow"
+			say("thanks")
 		return
 	_phase_t += delta
 	var far: float = _flat(o.global_position, bot.global_position)
@@ -113,6 +145,25 @@ func _physics_process(delta: float) -> void:
 	# сам упал в воду (не по команде) — выбираемся
 	if (bot.is_swimming or bot.is_diving) and command != "water":
 		_self_rescue(o)
+		return
+	# у хозяина нет руки/ноги — находим деталь, несём и прикручиваем
+	if command in ["follow", "carry", "stay"] and int(o.limb_mask) != 15 and bot.arms_count() > 0 \
+			and not bot.is_swimming and not bot.is_diving and not o.is_frozen:
+		if _repair_owner(o, delta):
+			return
+	if bot.held_limb != null and (o.limb_mask == 15 or int(bot.held_limb.owner_id) != int(o.peer_id)):
+		bot._drop_limb(Vector3.ZERO)       # чужая/лишняя деталь — кладём
+	# хозяин вмёрз в глыбу на суше — подбегаем и бьём по льду
+	if command in ["follow", "carry", "stay"] and o.is_frozen and not o.is_diving \
+			and not bot.is_swimming and not bot.is_diving:
+		if _walk_to(o.global_position, true, 2.05, delta):
+			var tf := o.global_position - bot.global_position
+			bot.visual.rotation.y = atan2(-tf.x, -tf.z)
+			if _jump_cool <= 0.0:
+				_jump_cool = 0.4
+				bot.bot_press("shake_ice")
+				if _bubble_t <= 0.0:
+					say("rescue")
 		return
 	# хозяин в воде — спасаем
 	if command in ["follow", "carry", "stay"] and (o.is_swimming or o.is_diving) and o.rescue_role == 0 \
@@ -125,7 +176,11 @@ func _physics_process(delta: float) -> void:
 
 	match command:
 		"follow":
-			_follow(o, delta)
+			if not _gate_duty(o, delta):
+				_follow(o, delta)
+		"come":
+			if _walk_to(o.global_position, true, 1.6, delta):
+				command = "stay"
 		"stay":
 			pass
 		"carry":
@@ -284,6 +339,23 @@ func _throw_owner(o: Node3D, delta: float) -> void:
 		command = "follow"
 
 
+## У Ледяного вала: встать в луч маяка (как раньше делал летающий бот)
+func _gate_duty(o: Node3D, delta: float) -> bool:
+	for g in get_tree().get_nodes_in_group("coop_gate"):
+		if bool(g.get("is_open")):
+			continue
+		if (g as Node3D).global_position.distance_to(o.global_position) > 70.0:
+			continue
+		var t: Vector3 = g.bot_target(bot, o)
+		if t == Vector3.INF:
+			return false
+		if _phase_t > 0.0 and _flat(t, bot.global_position) > 6.0 and _bubble_t <= 0.0:
+			say("gate")
+		_walk_to(t, _flat(t, bot.global_position) > 5.0, 0.1, delta)
+		return true
+	return false
+
+
 ## Сам в воде: из-подо льда — к полынье, на поверхности — к краю и на лёд
 func _self_rescue(o: Node3D) -> void:
 	if bot.rope.roped_by(bot) != null:
@@ -312,6 +384,40 @@ func _self_rescue(o: Node3D) -> void:
 
 
 ## Хозяин в воде: с поверхности — за руку с края, из-подо льда — верёвкой
+func _repair_owner(o: Node3D, delta: float) -> bool:
+	var part: Node3D = bot.held_limb
+	if part != null and int(part.owner_id) == int(o.peer_id) and not o.has_limb(part.kind):
+		if _walk_to(o.global_position, true, 1.5, delta):
+			var to := o.global_position - bot.global_position
+			bot.visual.rotation.y = atan2(-to.x, -to.z)
+			bot.bot_held["interact"] = true
+			if bot._repair_target == null and _jump_cool <= 0.0:
+				_jump_cool = 0.5
+				bot.bot_press("interact")
+				if _bubble_t <= 0.0:
+					say("repair")
+		return true
+	# ищем лежащую деталь хозяина
+	var best: Node3D = null
+	var bd := 60.0
+	for p in get_tree().get_nodes_in_group("limb_part"):
+		if int(p.owner_id) != int(o.peer_id) or o.has_limb(p.kind):
+			continue
+		if p.holder != null and is_instance_valid(p.holder):
+			continue
+		var d := (p as Node3D).global_position.distance_to(bot.global_position)
+		if d < bd:
+			bd = d
+			best = p
+	if best == null:
+		return false
+	if _walk_to(best.global_position, true, 0.9, delta):
+		if _jump_cool <= 0.0:
+			_jump_cool = 0.4
+			bot.bot_press("interact")
+	return true
+
+
 func _rescue_owner(o: Node3D, delta: float) -> void:
 	var rope = bot.rope
 	if rope.state == rope.S.ATTACHED and rope.target == o:
@@ -360,7 +466,7 @@ func _walk_to(p: Vector3, run: bool, stop: float, delta: float) -> bool:
 		_stuck_t = 0.0
 		return true
 	bot.camera_pivot.rotation.y = atan2(-to.x, -to.z)
-	bot.bot_move = Vector2(0.0, -clampf(d / 1.2, 0.35, 1.0))
+	bot.bot_move = Vector2(0.0, -clampf(d / 1.2, 0.12 if stop < 0.3 else 0.35, 1.0))
 	if run and d > 5.0:
 		bot.bot_held["sprint"] = true
 	var hv := Vector2(bot.velocity.x, bot.velocity.z).length()

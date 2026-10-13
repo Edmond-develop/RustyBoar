@@ -18,16 +18,16 @@ func _ready() -> void:
 	_bind_keys("interact", [KEY_E])
 	_bind_keys("throw", [KEY_Q])
 	_bind_keys("shake_ice", [KEY_R])
-	# ВРЕМЕННО, для проверки: позвать / отпустить летающего бота-помощника
+	_bind_keys("rip", [KEY_F])             # держать рядом с другом — оторвать ему руку/ногу
+	# ВРЕМЕННО, для проверки: боты-курьеры в скафандрах
 	_bind_keys("bot_add", [KEY_KP_ADD])
 	_bind_keys("bot_remove", [KEY_MINUS, KEY_KP_SUBTRACT])
+	_bind_keys("bot_panel", [KEY_B])
+	_bind_keys("possess", [KEY_G])
+	for i in 9:
+		_bind_keys("cmd_%d" % (i + 1), [KEY_1 + i])
 	# ВРЕМЕННО, для проверки: следующая локация (Shift — предыдущая)
 	_bind_keys("teleport", [KEY_EQUAL])
-	# ВРЕМЕННО, для проверки: боты-курьеры в скафандрах и команды им
-	_bind_keys("courier_add", [KEY_B])
-	_bind_keys("courier_remove", [KEY_N])
-	for i in 6:
-		_bind_keys("cmd_%d" % (i + 1), [KEY_1 + i])
 	# Инвентарь и предмет в руках
 	_bind_keys("inventory", [KEY_I])
 	_ensure_action("use_item")

@@ -40,11 +40,19 @@ void fragment() {
 	if (cover < 0.02) {
 		discard;
 	}
+	// два вида льда: гладкая прозрачная наледь (глазурь) и белый шершавый иней
+	float rime = smoothstep(0.5, 0.75, noise3(lp * 11.0 + 4.0) + (1.0 - cover) * 0.3);
+	// морозные «папоротники»: тонкие перистые прожилки
+	float fern = 1.0 - abs(noise3(lp * 34.0) * 2.0 - 1.0);
+	fern = pow(fern, 6.0) * (0.4 + 0.6 * amount);
 	float fine = noise3(lp * 45.0);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
-	ALBEDO = mix(vec3(0.7, 0.85, 0.97), vec3(0.96, 0.98, 1.0), clamp(fine * 0.6 + fres * 0.5, 0.0, 1.0));
-	ROUGHNESS = mix(0.1, 0.55, fine);
-	SPECULAR = 0.75;
-	EMISSION = vec3(step(0.94, fine) * 0.5 * amount);   // искорки инея
-	ALPHA = cover * (0.72 + 0.22 * fine);
+	vec3 glaze = vec3(0.62, 0.82, 0.95);
+	vec3 white = vec3(0.95, 0.98, 1.0);
+	vec3 col = mix(glaze, white, clamp(rime * 0.85 + fern + fres * 0.4, 0.0, 1.0));
+	ALBEDO = col;
+	ROUGHNESS = mix(0.05, 0.7, clamp(rime + fern * 0.5, 0.0, 1.0));
+	SPECULAR = 0.9;
+	EMISSION = vec3(step(0.95, fine) * 0.6 * amount) * (0.3 + rime);   // искорки инея
+	ALPHA = cover * mix(0.55, 0.95, clamp(rime + fern + fres * 0.5, 0.0, 1.0));
 }

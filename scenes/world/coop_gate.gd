@@ -395,8 +395,10 @@ func trace() -> Array[Vector3]:
 			pts.append(o + d * best_t)
 			_seal_hit = true
 			break
-		# отражение от корпуса дрона
+		# отражение от корпуса дрона (луч держим на одной высоте — иначе
+		# дрон на кочке поднимает его, и луч чиркает по верхушкам торосов)
 		var c: Vector3 = best[2]
+		c.y = beam_y
 		var id: int = best[1]
 		pts.append(c)
 		_lit[id] = bounce
@@ -496,7 +498,7 @@ func _make_aura(node: Node3D) -> Array:
 ## Луч жжёт свой дрон (и ботов-курьеров у хоста); подсказка внизу экрана
 func _local_burn(delta: float) -> void:
 	for b in get_tree().get_nodes_in_group("player"):
-		if b.get("is_bot") and _lit.has(int(b.get("peer_id"))):
+		if b.get("is_bot") and b != Network.local_player and _lit.has(int(b.get("peer_id"))):
 			var at: Vector3 = (b as Node3D).global_position + Vector3.UP * BODY_H
 			if _hits.has(int(b.get("peer_id"))):
 				at -= (_hits[int(b.get("peer_id"))][1] as Vector3) * 0.3
@@ -557,10 +559,13 @@ func _open() -> void:
 #  смещаясь вбок от линии луча.
 # ---------------------------------------------------------------------------
 func _bot_role(bot: Node) -> int:
-	var human := not chain.is_empty() and int(chain[0]) >= 0
+	var human := false
+	if not chain.is_empty():
+		var first = Network.find_player(int(chain[0]))
+		human = first != null and not first.get("is_bot")
 	var want := 1 if human else 0
-	for b in get_tree().get_nodes_in_group("coop_helper"):
-		if b != bot and int(b.get("_claimed_slot")) == 0:
+	for b in get_tree().get_nodes_in_group("player"):
+		if b != bot and b.get("is_bot") and int(b.get("_claimed_slot")) == 0:
 			want = 1
 	var cur := int(bot.get("_claimed_slot"))
 	if cur < 0 or cur == want:
@@ -594,20 +599,52 @@ func bot_target(bot: Node3D, _owner_node: Node3D) -> Vector3:
 		target = bot_spot_b + Vector3.UP * BODY_H
 		for p in get_tree().get_nodes_in_group("player"):
 			var pn := p as Node3D
-			if in_zone(pn.global_position) and not bool(pn.get("is_dead")) and pn.global_position.z < spot.z - 3.0:
+			if in_zone(pn.global_position) and not bool(pn.get("is_dead")) and not pn.get("is_bot") and pn.global_position.z < spot.z - 3.0:
 				target = pn.global_position + Vector3.UP * BODY_H
 				break
 	else:
 		target = seal_center()
-	# точка на линии луча возле своей точки
-	var t := (spot + Vector3.UP * BODY_H - o).dot(d)
-	var on_line := o + d * t
-	var out := target - on_line
-	out.y = 0.0
-	var angle := d.signed_angle_to(out.normalized(), Vector3.UP)
-	var b := offset_for_turn(angle)
-	var pos := on_line + side_of(d) * b
-	return Vector3(pos.x, spot.y, pos.z)
+	# точка на линии луча возле своей точки; если оттуда отражение упрётся
+	# в торос — сдвигаемся вдоль луча, пока путь до цели не станет чистым
+	var t0 := (spot + Vector3.UP * BODY_H - o).dot(d)
+	var best := Vector3.INF
+	for k in 25:
+		var shift := (float((k + 1) / 2) * 0.6) * (1.0 if k % 2 == 1 else -1.0)
+		var t := t0 + shift
+		if t < 1.0:
+			continue
+		var on_line := o + d * t
+		var out := target - on_line
+		out.y = 0.0
+		var angle := d.signed_angle_to(out.normalized(), Vector3.UP)
+		var b := offset_for_turn(angle)
+		var pos := on_line + side_of(d) * b
+		if best == Vector3.INF:
+			best = pos
+		if not in_zone(Vector3(pos.x, global_position.y, pos.z)):
+			continue
+		if _clear_path(pos, target):
+			best = pos
+			break
+	return Vector3(best.x, spot.y, best.z)
+
+
+## Свободен ли путь луча от точки (на высоте луча) до цели
+func _clear_path(from: Vector3, to: Vector3) -> bool:
+	var a := Vector3(from.x, to.y, from.z)
+	var e := to - (to - a).normalized() * 1.2     # саму печать/ворота не считаем помехой
+	var ex: Array[RID] = []
+	for n in get_tree().get_nodes_in_group("player"):
+		if n is CollisionObject3D:
+			ex.append((n as CollisionObject3D).get_rid())
+	# три параллельных луча: с запасом, чтобы не чиркать по краю тороса
+	var sd := side_of((e - a).normalized()) * 0.4
+	for k in [0.0, 1.0, -1.0]:
+		var q := PhysicsRayQueryParameters3D.create(a + sd * k, e + sd * k, 1)
+		q.exclude = ex
+		if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+			return false
+	return true
 
 
 func bot_work(_bot: Node3D, _delta: float) -> void:
