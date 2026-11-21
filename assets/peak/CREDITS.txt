@@ -1,0 +1,4 @@
+Шаг 122 — ассеты Пика:
+- Ice 0002, Ground 0031 (Icy Rock) — TextureCan.com, CC0.
+- Snow 005 — 3dtextures.me (Joao Paulo), CC0.
+- Space Kit, Space Station Kit — Kenney (kenney.nl), CC0.

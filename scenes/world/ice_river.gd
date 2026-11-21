@@ -1,6 +1,16 @@
 class_name IceRiver
 extends StaticBody3D
-## Огромное замёрзшее озеро — первый участок «Бореи» (~450 × 830 м).
+## Огромное замёрзшее озеро — первый участок «Бореи».
+##
+## С юга на север (шаг 41):
+##   915…518  Каток и Ледяной лабиринт (450 м в ширину)
+##   518…385  Ледяное поле — расширяется до 800 м, иди куда хочешь
+##   385…330  Воронка: поле сужается, по краям — ледяные стены
+##   330…302  Узкий скользкий проход между высокими ледяными стенами
+##   302…-654 Ледяной каньон (ice_canyon.gd, canyon_layout.gd): дороги в ущельях над пропастью;
+##            озера льда здесь нет, кроме трёх замёрзших прудов (POOLS)
+##   -654…    дальше озера нет: Снежная пустошь (snow_waste.gd), за ней — прежний мир
+##            (лавинный склон и т.д.), сдвинутый к северу
 ##
 ## Всё строится из кода по «зерну» layout_seed, поэтому у всех игроков в сети
 ## озеро и препятствия получаются одинаковыми.
@@ -26,9 +36,9 @@ extends StaticBody3D
 ## Лёд разбит на куски 30×30 м: при новой полынье перестраиваются только соседние куски.
 ## Высота льда зависит только от z — функция river_y(z) (её же использует рельеф).
 
-@export var half_width := 225.0
+@export var half_width := 400.0         ## Самая большая полуширина (Ледяное поле); у каждого z своя — hw_at()
 @export var z_start := 915.0
-@export var z_end := 92.0
+@export var z_end := -654.0
 @export var row := 0.5                 ## Шаг рядов сетки льда (меньше — круглее полыньи)
 @export var chunk_size := 30.0
 @export var layout_seed := 20261008
@@ -42,7 +52,7 @@ extends StaticBody3D
 ## Риск провалиться, наступив на участок с N трещинами (N = номер в списке, 0 — свежий лёд)
 @export var crack_risk := PackedFloat32Array([0.0, 0.30, 0.60, 0.90, 0.95, 0.99, 1.0])
 @export var collapse_radius := 6.0     ## Радиус провала (6 м = круг ~12 м)
-@export var weak_spot_count := 45      ## Сколько слабых участков на озере
+@export var weak_spot_count := 64      ## Сколько слабых участков на озере (не больше 64 — столько знает шейдер)
 @export var weak_spot_size := Vector2(3.0, 5.0)   ## Радиус слабого участка (м)
 @export var weak_risk := 0.7           ## Шанс провалиться на слабом участке с каждого шага
 @export var max_dynamic_holes := 150
@@ -60,13 +70,28 @@ const DEPTH_MAX := 16.0
 const WATER_GAP := 0.6        ## Насколько вода ниже льда (как water_depth)
 const CURRENT_SPEED := 0.3    ## Скорость течения подо льдом, м/с
 ## Где стоят жаровни: z (по x ищем ближайший к тропе крепкий лёд)
-const HEATER_Z := [920.0, 900.0, 505.0, 478.0, 400.0, 330.0, 245.0, 170.0, 100.0]
+const HEATER_Z := [920.0, 900.0, 505.0, 478.0, 430.0, 380.0]
 ## Каток и Ледяной лабиринт: толстый старый лёд — не трескается и не проваливается
 const TOROS_Z := Vector2(518.0, 916.0)
-## Размеры озера для статических функций (как half_width / z_start / z_end)
+## Размеры озера для статических функций (как z_start / z_end); LAKE_HALF — ширина у катка и на севере
 const LAKE_HALF := 225.0
 const LAKE_Z_START := 915.0
-const LAKE_Z_END := 92.0
+const LAKE_Z_END := -654.0     ## (шаг 50: севернее каньона озера больше нет)
+
+## Шаг 41: старый лёд севернее Разломов сдвинут на SHIFT к северу, на его месте — поле и каньон
+const SHIFT := 1040.0
+const FIELD_HALF := 440.0      ## Полуширина Ледяного поля (шаг 139: было 400)
+const FIELD_N := 260.0         ## Северный край поля — дальше воронка (шаг 140: проход длиннее)
+const PASS_S := 215.0          ## Воронка кончается — дальше узкий проход (лёд), перегорожен камнями (шаг 140)
+## Шаг 140: обход камней — две полосы тонкого льда (x0, x1, z0, z1): трещит от каждого шага, топтаться нельзя
+const THIN_RECTS := [Vector4(-37.5, -30.5, 160.0, 212.0), Vector4(30.5, 37.5, 160.0, 212.0)]
+const THIN_COLLAPSE := 2.6     ## радиус провала на тонком льду
+const THIN_STAND := 1.2        ## стоишь на тонком льду столько секунд — ещё трещина
+const CANYON_S := 160.0
+const PASS_HALF := 40.0        ## шаг 139: у подножия горы лёд шире (было 14)        ## Горловина каньона (конец воронки)
+const CANYON_N := -654.0       ## Северный край каньона — дальше старое озеро
+## Замёрзшие пруды в каньоне: [x0, x1, z0, z1, высота льда] (план — canyon_layout.gd)
+const POOLS := []                  ## шаг 139: каньона с прудами больше нет (на его месте — Снежная гора, snow_hill.gd)
 
 static var _depth_noise: FastNoiseLite
 ## Сильные подводные течения: «реки» подо льдом от одной полыньи к другой.
@@ -99,6 +124,73 @@ var heaters: Array[Vector3] = []       ## жаровни на льду
 
 
 static func river_y(z: float) -> float:
+	if z >= CANYON_S - 2.0:
+		return 0.0
+	if z > CANYON_N:
+		for p in POOLS:                          # пруды каньона (по z не пересекаются по высоте)
+			if z > p[2] - 2.0 and z < p[3] + 2.0:
+				return p[4]
+		return -8.0
+	return _old_river_y(z + SHIFT)
+
+
+## Полуширина льда на этой широте (в каньоне — 0, там только пруды)
+static func hw_at(z: float) -> float:
+	if z >= 518.0:
+		return LAKE_HALF
+	if z >= 490.0:
+		return lerpf(LAKE_HALF, FIELD_HALF, smoothstep(518.0, 490.0, z))
+	if z >= FIELD_N:
+		return FIELD_HALF
+	if z >= PASS_S:
+		return lerpf(PASS_HALF, FIELD_HALF, (z - PASS_S) / (FIELD_N - PASS_S))
+	if z >= CANYON_S:
+		return PASS_HALF
+	if z > CANYON_N:
+		return 0.0
+	return LAKE_HALF
+
+
+## Где по x есть лёд на этой широте: отрезки (x0, x1)
+static func spans_at(z: float) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	if z >= LAKE_Z_START or z <= LAKE_Z_END:
+		return out
+	if z > CANYON_N and z < CANYON_S:
+		for p in POOLS:
+			if z > p[2] and z < p[3]:
+				out.append(Vector2(p[0], p[1]))
+		return out
+	var hw := hw_at(z)
+	out.append(Vector2(-hw, hw))
+	return out
+
+
+## Точка над озером (с отступом margin от края льда)
+static func in_lake(x: float, z: float, margin: float = 0.0) -> bool:
+	if z >= LAKE_Z_START - margin or z <= LAKE_Z_END + margin:
+		return false
+	for sp in spans_at(z):
+		if x > sp.x + margin and x < sp.y - margin:
+			if z > CANYON_N and z < CANYON_S:
+				# в пруду — отступ и по z
+				for p in POOLS:
+					if x > p[0] and x < p[1] and z > p[2] + margin and z < p[3] - margin:
+						return true
+				return false
+			return true
+	return false
+
+
+## Пруд каньона в этой точке (или пустой массив)
+static func pool_at(x: float, z: float) -> Array:
+	for p in POOLS:
+		if x > p[0] and x < p[1] and z > p[2] and z < p[3]:
+			return p
+	return []
+
+
+static func _old_river_y(z: float) -> float:
 	if z >= 410.0:
 		return 0.0
 	if z >= 394.0:
@@ -126,11 +218,41 @@ static func _noise() -> FastNoiseLite:
 ## Глубина воды в точке (м): от DEPTH_MIN до DEPTH_MAX, у берегов мельче.
 ## Одна и та же у всех игроков (не зависит от случайности).
 static func lake_depth(x: float, z: float) -> float:
-	var n := _noise().get_noise_2d(x, z) * 0.5 + 0.5
+	# старое озеро сдвинуто на SHIFT — глубины берём по его прежним координатам (дно то же, что было)
+	var zs := z + SHIFT if z <= CANYON_N else z
+	var n := _noise().get_noise_2d(x, zs) * 0.5 + 0.5
 	var t := smoothstep(0.32, 0.68, n)
-	var edge := minf(minf(LAKE_HALF - absf(x), LAKE_Z_START - z), z - LAKE_Z_END)
+	if z > CANYON_N and z < CANYON_S - 2.0:
+		var pl := pool_at(x, z)
+		if pl.size() > 5:
+			return deep_pool_depth(x, z, pl)
+		return lerpf(2.6, 4.0, t)       # пруды каньона неглубокие
+	var edge := minf(minf(hw_at(z) - absf(x), LAKE_Z_START - z), z - LAKE_Z_END)
+	if z <= CANYON_N:
+		edge = minf(edge, CANYON_N - z)
 	t *= smoothstep(0.0, 30.0, edge)
 	return lerpf(DEPTH_MIN, DEPTH_MAX, t)
+
+
+## Насколько вода студит дрона (1 — как везде; в Глубоком озере у ворот — тёплые ключи)
+static func water_cold(x: float, z: float) -> float:
+	if z > CANYON_N and z < CANYON_S:
+		var pl := pool_at(x, z)
+		if pl.size() > 5:
+			return 0.25
+	return 1.0
+
+
+## Глубокое озеро у ворот: у берега площадки мелко, к западу глубже, яма и грот — по плану
+static func deep_pool_depth(x: float, z: float, pl: Array) -> float:
+	var maxd: float = pl[5]
+	var shore := minf(minf(x - pl[0], pl[1] - x), minf(z - pl[2], pl[3] - z))
+	var d := lerpf(2.5, maxd - 4.0, smoothstep(pl[1] - 2.0, pl[1] - 28.0, x))
+	# глубокая яма
+	pass
+	# у берега — отмель
+	d = minf(d, 1.2 + shore * 1.4)
+	return clampf(d, 1.0, maxd)
 
 
 ## Высота дна озера
@@ -146,11 +268,12 @@ func _generate_streams() -> void:
 	rng.seed = layout_seed + 4242
 	var cand: Array[Vector3] = []
 	for c in circles:
-		if c.y > 250.0 and c.y < 520.0 and c.z >= 1.5 and absf(c.x) < half_width - 20.0:
+		var zone_ok := c.y > FIELD_N + 5.0 and c.y < 512.0
+		if zone_ok and c.z >= 1.5 and absf(c.x) < hw_at(c.y) - 20.0:
 			cand.append(c)
 	var used := {}
 	var tries := 0
-	while streams.size() < 12 and tries < 400 and cand.size() > 2:
+	while streams.size() < 16 and tries < 600 and cand.size() > 2:
 		tries += 1
 		var ai := rng.randi() % cand.size()
 		if used.has(ai):
@@ -222,7 +345,7 @@ func is_hole(x: float, z: float, pad: float = 0.0) -> bool:
 
 
 func in_bounds(pos: Vector3) -> bool:
-	return absf(pos.x) < half_width and pos.z < z_start and pos.z > z_end
+	return in_lake(pos.x, pos.z)
 
 
 ## Высота поверхности воды в полыньях
@@ -270,7 +393,7 @@ func nearest_ice(pos: Vector3, reach: float, prefer: Vector3 = Vector3.ZERO) -> 
 
 
 func _solid_ice(x: float, z: float, near_c: Array[Vector3], near_r: Array[Vector4]) -> bool:
-	if absf(x) > half_width - 0.3 or z > z_start - 0.3 or z < z_end + 0.3:
+	if not in_lake(x, z, 0.3):
 		return false
 	for c in near_c:
 		if Vector2(x - c.x, z - c.y).length() < c.z + 0.25:
@@ -357,7 +480,7 @@ func _place_heaters() -> void:
 			var x := 7.0 + k * 3.0
 			if k % 2 == 1:
 				x = -x + 3.0
-			if is_hole(x, z, 4.0) or is_weak_spot(Vector3(x, 0, z)):
+			if is_hole(x, z, 4.0) or is_weak_spot(Vector3(x, 0, z)) or (z < z_start and not in_lake(x, z, 4.0)):
 				continue
 			var y := river_y(z)
 			if z > z_start:   # в лагере — на земле
@@ -405,7 +528,8 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		for node in get_tree().get_nodes_in_group("parcel"):
 			var p := node as Parcel
-			if p and not p.is_held and in_bounds(p.global_position) \
+			# (печати ворот лежат на дне нарочно — их не трогаем)
+			if p and not p.is_held and not p.get("dive_ok") and in_bounds(p.global_position) \
 					and p.global_position.y < water_y(p.global_position.z) - 2.0:
 				p.server_return_to_path()
 
@@ -454,15 +578,55 @@ func risk_for(n: int) -> float:
 func _generate_weak_spots() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = layout_seed + 7777
+	# пруды каньона: лёд в трещинах почти везде
+	for k in POOLS.size():
+		var pl: Array = POOLS[k]
+		var want: int = [7, 5, 0, 0][k]
+		var pt := 0
+		while want > 0 and pt < 200:
+			pt += 1
+			var r := rng.randf_range(3.0, 4.6)
+			var x: float = rng.randf_range(pl[0] + r + 1.0, pl[1] - r - 1.0)
+			var z: float = rng.randf_range(pl[2] + r + 1.0, pl[3] - r - 1.0)
+			if is_hole(x, z, r + 1.0):
+				continue
+			var ok2 := true
+			# там, где дорога выходит на пруд, лёд крепкий — первый шаг не в пролом
+			for key in CanyonLayout.ROADS:
+				for e in [CanyonLayout.ROADS[key][0], CanyonLayout.ROADS[key][-1]]:
+					if Vector2(x - e[0], z - e[2]).length() < r + 8.0:
+						ok2 = false
+			for w in weak_spots:
+				if Vector2(x - w.x, z - w.y).length() < r + w.z + 1.5:
+					ok2 = false
+					break
+			if ok2:
+				weak_spots.append(Vector3(x, z, r))
+				want -= 1
 	var tries := 0
-	while weak_spots.size() < weak_spot_count and tries < weak_spot_count * 40:
+	# (шаг 50: озера севернее каньона нет; места, что выпали бы туда, считаем «занятыми»,
+	#  чтобы на южном озере слабые участки остались там же, где были)
+	var north: Array[Vector3] = []
+	while weak_spots.size() + north.size() < weak_spot_count and tries < weak_spot_count * 40:
 		tries += 1
 		var r := rng.randf_range(weak_spot_size.x, weak_spot_size.y)
-		var x := rng.randf_range(-half_width + r + 2.0, half_width - r - 2.0)
-		var z := rng.randf_range(z_end + r + 4.0, z_start - 18.0)   # у лагеря лёд крепкий
+		var z := rng.randf_range(-968.0 + r + 4.0, z_start - 18.0)   # у лагеря лёд крепкий
 		if z > TOROS_Z.x - r - 4.0 and z < TOROS_Z.y + r + 4.0:
 			continue   # в Торосах лёд толстый
-		if is_hole(x, z, r + 2.0):
+		if z > CANYON_N - r - 4.0 and z < PASS_S + 30.0 + r:
+			continue   # каньон — там свои пруды; в узком проходе не обойти — там лёд крепкий
+		var hw := hw_at(z) if z > CANYON_N else LAKE_HALF
+		var x := rng.randf_range(-hw + r + 2.0, hw - r - 2.0)
+		if z <= CANYON_N:
+			var ok_n := true
+			for w in north:
+				if Vector2(x - w.x, z - w.y).length() < r + w.z + 6.0:
+					ok_n = false
+					break
+			if ok_n:
+				north.append(Vector3(x, z, r))
+			continue
+		if not in_lake(x, z, r + 2.0) or is_hole(x, z, r + 2.0):
 			continue
 		var ok := true
 		for w in weak_spots:
@@ -474,11 +638,35 @@ func _generate_weak_spots() -> void:
 	var sm := ice_material as ShaderMaterial
 	if sm:
 		var arr := PackedVector4Array()
+		# шаг 140: полосы тонкого льда — тоже тёмные (на вид как слабый лёд), но риск у них свой
+		for r in THIN_RECTS:
+			var v: Vector4 = r
+			var zc := v.z + 2.5
+			while zc < v.w - 1.0:
+				arr.append(Vector4((v.x + v.y) * 0.5, zc, 3.7, 0.0))
+				zc += 4.0
 		for w in weak_spots:
+			if arr.size() >= 64:
+				break
 			arr.append(Vector4(w.x, w.y, w.z, 0.0))
 		while arr.size() < 64:
 			arr.append(Vector4(0, 0, 0, 0))
 		sm.set_shader_parameter("weak_spots", arr)
+
+
+## Толстый лёд (не трескается): каток и лабиринт, узкий проход к каньону и выход из каньона —
+## там проходят все, и обойти нельзя
+static func thick_ice(z: float) -> bool:
+	return (z > TOROS_Z.x and z < TOROS_Z.y) or (z <= CANYON_N and z > CANYON_N - 14.0)
+
+
+## Шаг 140: полосы тонкого льда в обход камней
+static func thin_ice(x: float, z: float) -> bool:
+	for r in THIN_RECTS:
+		var v: Vector4 = r
+		if x > v.x and x < v.y and z > v.z and z < v.w:
+			return true
+	return false
 
 
 func is_weak_spot(p: Vector3) -> bool:
@@ -493,26 +681,43 @@ func _server_wear() -> void:
 		if not _on_lake_ice(d):
 			continue   # подпрыгнул или на заплатке — участок не сбрасываем, иначе проход засчитается дважды
 		var cell := _cell_of(d.global_position)
+		var thin := thin_ice(d.global_position.x, d.global_position.z)
 		if _drone_cell.get(d, Vector2i(2147483647, 0)) == cell:
+			# шаг 140: топчусь на тонком льду — он всё равно трещит
+			if thin:
+				var st: float = _thin_stand.get(d, 0.0) + get_physics_process_delta_time()
+				_thin_stand[d] = st
+				if st >= THIN_STAND:
+					_thin_stand[d] = 0.0
+					_wear_cell(d, cell, true, 1)
 			continue
+		_thin_stand[d] = 0.0
 		var dz: float = d.global_position.z
-		if near_heater(d.global_position.x, dz) or (dz > TOROS_Z.x and dz < TOROS_Z.y):
+		if not thin and (near_heater(d.global_position.x, dz) or thick_ice(dz)):
 			_drone_cell[d] = cell
 			continue
 		_drone_cell[d] = cell
-		var before: int = _cracks.get(cell, 0)
-		var risk := risk_for(before)
-		if is_weak_spot(_cell_center(cell)):   # участок слабый, если его центр в слабом пятне
-			risk = maxf(risk, weak_risk)
-		if randf() < risk:
-			var p: Vector3 = d.global_position
-			var jitter := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
-			_server_break(p.x + jitter.x, p.z + jitter.z, collapse_radius)
-			continue
-		var add := 2 if d.is_sprinting else 1
-		var v: Vector3 = d.velocity
-		var dir_yaw := atan2(-v.z, v.x) if Vector2(v.x, v.z).length() > 0.3 else randf() * PI
-		_set_cracks.rpc(cell, before + add, randi(), dir_yaw)
+		_wear_cell(d, cell, thin, 2 if d.is_sprinting else 1)
+
+
+var _thin_stand := {}
+
+
+## Участок под дроном: кубик на провал по числу трещин, иначе — добавить трещины
+func _wear_cell(d: Node3D, cell: Vector2i, thin: bool, add: int) -> void:
+	var before: int = _cracks.get(cell, 0)
+	var risk := risk_for(before)
+	if not thin and is_weak_spot(_cell_center(cell)):   # участок слабый, если его центр в слабом пятне
+		risk = maxf(risk, weak_risk)
+	if randf() < risk:
+		var p: Vector3 = d.global_position
+		var jr := 0.6 if thin else 1.5
+		var jitter := Vector3(randf_range(-jr, jr), 0.0, randf_range(-jr, jr))
+		_server_break(p.x + jitter.x, p.z + jitter.z, THIN_COLLAPSE if thin else collapse_radius)
+		return
+	var v: Vector3 = d.velocity
+	var dir_yaw := atan2(-v.z, v.x) if Vector2(v.x, v.z).length() > 0.3 else randf() * PI
+	_set_cracks.rpc(cell, before + add, randi(), dir_yaw)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -546,7 +751,7 @@ func _server_break(x: float, z: float, radius: float) -> void:
 	for pb in _pending_breaks:
 		if Vector2(pb.x - x, pb.y - z).length() < pb.z + radius:
 			return      # тут уже трещит — второй провал не нужен
-	if absf(x) > half_width - 1.0 or z > z_start - 3.0 or z < z_end + 1.0:
+	if not in_lake(x, z, 1.0) or z > z_start - 3.0:
 		return
 	if near_heater(x, z, radius):
 		return
@@ -612,48 +817,28 @@ func _open_hole_area(x: float, z: float, radius: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _generate_holes(rng: RandomNumberGenerator) -> void:
-	var w := half_width
+	var w := LAKE_HALF
 
-	# Разломы (после Ледяного вала): редкие небольшие полыньи
-	for i in 30:
-		var z := rng.randf_range(392.0, 508.0)
-		if absf(z - 386.0) < 5.0:
-			continue
-		circles.append(Vector3(rng.randf_range(-w + 5.0, w - 5.0), z, rng.randf_range(1.5, 2.8)))
+	# Ледяное поле: россыпь небольших полыней и несколько больших разводий
+	for i in 100:
+		var z := rng.randf_range(FIELD_N + 6.0, 508.0)
+		var hw := hw_at(z)
+		circles.append(Vector3(rng.randf_range(-hw + 8.0, hw - 8.0), z, rng.randf_range(1.5, 3.0)))
+	for i in 15:
+		var z := rng.randf_range(FIELD_N + 18.0, 480.0)
+		var hw := hw_at(z)
+		var x := rng.randf_range(-hw + 30.0, hw - 30.0)
+		if absf(x) < 25.0:
+			x += 50.0 * signf(x + 0.01)       # посередине поля — свободный проход
+		circles.append(Vector3(x, z, rng.randf_range(5.0, 8.5)))
 
-	# Полыньи: тонкий лёд над водой (трещит под весом)
-	var x := -w + 12.0
-	while x < w - 10.0:
-		var patch := Vector3(x + rng.randf_range(-5.0, 5.0), 330.0 + rng.randf_range(-1.0, 1.0), rng.randf_range(3.2, 4.2))
-		thin_patches.append(patch)
-		circles.append(patch)
-		x += rng.randf_range(24.0, 34.0)
-
-	# Полоса полыней с узкими перешейками
-	_band_with_isthmuses(316.0, 322.0, 18.0, 26.0, 1.8, 2.8, band_isthmuses, rng)
-
-	# Разводье во всю ширину (переправа по льдинам)
-	rects.append(Vector4(-w - 1.0, w + 1.0, 296.0, 306.0))
-
-	# Россыпь полыней после разводья
-	for i in 30:
-		circles.append(Vector3(rng.randf_range(-w + 3.0, w - 3.0), rng.randf_range(286.0, 292.0), rng.randf_range(1.5, 2.6)))
-
-	# Гейзеры, ветер и вихри: полыньи между рядами гейзеров
-	for i in 26:
-		circles.append(Vector3(rng.randf_range(-w + 3.0, w - 3.0), rng.randf_range(146.0, 186.0), rng.randf_range(1.4, 2.6)))
-
-	# Финальное разводье (трамплины или льдины)
-	rects.append(Vector4(-w - 1.0, w + 1.0, 113.0, 119.0))
-
-	# Финальная полоса с перешейками
-	_band_with_isthmuses(95.0, 101.0, 14.0, 19.0, 3.0, 4.0, final_isthmuses, rng)
+	# шаг 139: каньона с прудами больше нет
 
 
 ## Полоса воды поперёк всего озера, через которую ведут узкие перешейки.
 func _band_with_isthmuses(z_min: float, z_max: float, gap_min: float, gap_max: float,
 		width_min: float, width_max: float, out: Array[float], rng: RandomNumberGenerator) -> void:
-	var w := half_width
+	var w := LAKE_HALF
 	var x := -w - 1.0
 	while x < w + 1.0:
 		var next := x + rng.randf_range(gap_min, gap_max)
@@ -694,27 +879,51 @@ func _hole_intervals(zc: float) -> Array[Vector2]:
 	return merged
 
 
-func _ice_runs(holes: Array) -> Array[Vector2]:
+## Полосы льда в ряду: отрезки spans без полыней holes
+func _ice_runs(holes: Array, spans: Array[Vector2]) -> Array[Vector2]:
 	var runs: Array[Vector2] = []
-	var x := -half_width
-	for h in holes:
-		var a := maxf(h.x, -half_width)
-		var b := minf(h.y, half_width)
-		if b <= -half_width or a >= half_width:
-			continue
-		if a > x + 0.05:
-			runs.append(Vector2(x, a))
-		x = maxf(x, b)
-	if x < half_width - 0.05:
-		runs.append(Vector2(x, half_width))
+	for sp in spans:
+		var x := sp.x
+		for h in holes:
+			var a := maxf(h.x, sp.x)
+			var b := minf(h.y, sp.y)
+			if b <= sp.x or a >= sp.y:
+				continue
+			if a > x + 0.05:
+				runs.append(Vector2(x, a))
+			x = maxf(x, b)
+		if x < sp.y - 0.05:
+			runs.append(Vector2(x, sp.y))
 	return runs
+
+
+## Часть отрезка run, где в соседнем ряду льда нет (там нужен бортик)
+func _open_parts(run: Vector2, other: Array) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var x := run.x
+	for o in other:
+		var a := maxf(o.x, run.x)
+		var b := minf(o.y, run.y)
+		if b <= a:
+			continue
+		if a > x + 0.01:
+			out.append(Vector2(x, a))
+		x = maxf(x, b)
+	if x < run.y - 0.01:
+		out.append(Vector2(x, run.y))
+	return out
+
+
+func _row_runs(iz: int) -> Array[Vector2]:
+	var zc := z_start - (iz + 0.5) * row
+	return _ice_runs(_hole_intervals(zc), spans_at(zc))
 
 
 func _build_ice() -> void:
 	var nz := _row_count()
 	_holes_by_row.clear()
 	for iz in nz:
-		_holes_by_row.append(_hole_intervals(z_start - (iz + 0.5) * row))
+		_holes_by_row.append(_row_runs(iz))
 	var ncx := int(ceil(half_width * 2.0 / chunk_size))
 	var ncz := int(ceil((z_start - z_end) / chunk_size))
 	for cz in ncz:
@@ -728,7 +937,7 @@ func _refresh_area(x0: float, x1: float, z0: float, z1: float) -> void:
 	var r0 := clampi(int(floor((z_start - z1) / row)) - 1, 0, nz - 1)
 	var r1 := clampi(int(ceil((z_start - z0) / row)) + 1, 0, nz - 1)
 	for iz in range(r0, r1 + 1):
-		_holes_by_row[iz] = _hole_intervals(z_start - (iz + 0.5) * row)
+		_holes_by_row[iz] = _row_runs(iz)
 	var cx0 := int(floor((x0 - 1.0 + half_width) / chunk_size))
 	var cx1 := int(floor((x1 + 1.0 + half_width) / chunk_size))
 	var cz0 := int(floor((z_start - z1 - 1.0) / chunk_size))
@@ -756,8 +965,8 @@ func _build_chunk(key: Vector2i) -> void:
 		var z1 := z0 - row
 		var y0 := river_y(z0) + 0.02
 		var y1 := river_y(z1) + 0.02
-		var holes: Array = _holes_by_row[iz]
-		for full in _ice_runs(holes):
+		var runs: Array = _holes_by_row[iz]
+		for full in runs:
 			var rx0 := maxf(full.x, xa)
 			var rx1 := minf(full.y, xb)
 			if rx1 <= rx0 + 0.08:
@@ -771,23 +980,24 @@ func _build_chunk(key: Vector2i) -> void:
 				verts.append(v)
 				normals.append(Vector3.UP)
 				faces.append(v)
-			# Бортики по бокам — только у края полыньи (не у края куска и не у края озера)
-			if full.x > -half_width + 0.01 and full.x >= xa - 0.001:
+			# Бортики по бокам — у края полыньи и у края льда (не у края куска)
+			if full.x >= xa - 0.001:
 				_add_skirt(verts, normals, a, c, Vector3.LEFT)
-			if full.y < half_width - 0.01 and full.y <= xb + 0.001:
+			if full.y <= xb + 0.001:
 				_add_skirt(verts, normals, b, d, Vector3.RIGHT)
-			# Бортики спереди/сзади — там, где соседний ряд проваливается в воду
-			if iz > 0:
-				for seg in _overlap(run, _holes_by_row[iz - 1]):
-					_add_skirt(verts, normals, Vector3(seg.x, y0, z0), Vector3(seg.y, y0, z0), Vector3.BACK)
-			if iz < nz - 1:
-				for seg in _overlap(run, _holes_by_row[iz + 1]):
-					_add_skirt(verts, normals, Vector3(seg.x, y1, z1), Vector3(seg.y, y1, z1), Vector3.FORWARD)
+			# Бортики спереди/сзади — там, где в соседнем ряду льда нет
+			var prev: Array = _holes_by_row[iz - 1] if iz > 0 else []
+			for seg in _open_parts(run, prev):
+				_add_skirt(verts, normals, Vector3(seg.x, y0, z0), Vector3(seg.y, y0, z0), Vector3.BACK)
+			var nxt: Array = _holes_by_row[iz + 1] if iz < nz - 1 else []
+			for seg in _open_parts(run, nxt):
+				_add_skirt(verts, normals, Vector3(seg.x, y1, z1), Vector3(seg.y, y1, z1), Vector3.FORWARD)
 
 	var mi: MeshInstance3D = _chunk_meshes.get(key)
 	if mi == null:
 		mi = MeshInstance3D.new()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visibility_range_end = 320.0
 		add_child(mi)
 		_chunk_meshes[key] = mi
 		var shape := ConcavePolygonShape3D.new()
@@ -839,15 +1049,29 @@ func _build_water() -> void:
 	var z := z_start + 1.0
 	while z > z_end - 1.0:
 		var z1 := z - 2.0
-		var y0 := river_y(z) - water_depth
-		var y1 := river_y(z1) - water_depth
-		var a := Vector3(-half_width - 2.0, y0, z)
-		var b := Vector3(half_width + 2.0, y0, z)
-		var c := Vector3(-half_width - 2.0, y1, z1)
-		var d := Vector3(half_width + 2.0, y1, z1)
-		for v in [a, c, b, b, c, d]:
-			verts.append(v)
-			normals.append(Vector3.UP)
+		var zm := (z + z1) * 0.5
+		var in_canyon := zm > CANYON_N - 2.0 and zm < CANYON_S
+		var y0 := river_y(zm) - water_depth
+		var y1 := y0
+		if not in_canyon:
+			y0 = river_y(z) - water_depth
+			y1 = river_y(z1) - water_depth
+		var sps: Array[Vector2] = []
+		if in_canyon:
+			for pl in POOLS:
+				if zm > pl[2] - 1.0 and zm < pl[3] + 1.0:
+					sps.append(Vector2(pl[0] - 0.5, pl[1] + 0.5))
+		else:
+			var hw := maxf(hw_at(z), hw_at(z1))
+			sps.append(Vector2(-hw - 2.0, hw + 2.0))
+		for sp in sps:
+			var a := Vector3(sp.x, y0, z)
+			var b := Vector3(sp.y, y0, z)
+			var c := Vector3(sp.x, y1, z1)
+			var d := Vector3(sp.y, y1, z1)
+			for v in [a, c, b, b, c, d]:
+				verts.append(v)
+				normals.append(Vector3.UP)
 		z = z1
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)

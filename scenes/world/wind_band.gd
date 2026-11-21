@@ -6,10 +6,12 @@ extends Node3D
 @export var z_max := 157.0
 @export var z_min := 122.0
 @export var half_width := 150.0
+@export var center_x := 0.0          ## середина полосы по x
+@export var hint := ""               ## подсказка под надписью о порыве
 @export var strength := 6.5
-@export var period := 7.0
+@export var period := 10.0
 @export var warning_time := 1.2
-@export var gust_time := 2.4
+@export var gust_time := 5.0          ## порыв держится долго и стихает плавно
 
 var _local_t := 0.0
 var _snow: GPUParticles3D
@@ -54,10 +56,10 @@ func _physics_process(delta: float) -> void:
 	var inside := false
 	if me:
 		var p: Vector3 = me.global_position
-		inside = p.z < z_max and p.z > z_min and absf(p.x) < half_width
+		inside = p.z < z_max and p.z > z_min and absf(p.x - center_x) < half_width
 
 	_label.visible = inside and (gusting or (warning and fmod(cycle, 0.3) < 0.2))
-	_label.text = "ПОРЫВ ВЕТРА  →" if dir > 0.0 else "←  ПОРЫВ ВЕТРА"
+	_label.text = ("ПОРЫВ ВЕТРА  →" if dir > 0.0 else "←  ПОРЫВ ВЕТРА") + (("\n" + hint) if hint != "" else "")
 	_snow.emitting = inside and gusting
 	if not inside:
 		return
@@ -65,5 +67,8 @@ func _physics_process(delta: float) -> void:
 	_snow.global_position = p2 + Vector3(-dir * 12.0, 2.0, 0.0)
 	(_snow.process_material as ParticleProcessMaterial).direction = Vector3(dir, 0.0, 0.0)
 	if gusting and not me.is_dead:
-		me.apply_wind(Vector3(dir * strength, 0.0, 0.0))
+		# налетает быстро, держится, к концу медленно стихает (с последними толчками)
+		var u := (cycle - idle - warning_time) / gust_time
+		var env := smoothstep(0.0, 0.1, u) * (1.0 - 0.75 * smoothstep(0.6, 1.0, u)) * (0.9 + 0.1 * sin(t * 5.0))
+		me.apply_wind(Vector3(dir * strength * env, 0.0, 0.0))
 		me.add_shake(0.03)

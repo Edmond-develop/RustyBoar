@@ -22,6 +22,7 @@ signal holders_changed
 @export var drag_speed := 1.8           ## Скорость волочения одним курьером
 @export var max_carry_distance := 3.4   ## Тяжёлый груз падает, если носильщики разошлись дальше
 @export var label_height := 0.6
+var _return_announced := -100.0
 @export var lost_y := -12.0             ## Упала ниже (в пропасть) — возвращается на тропу
 @export var soak_percent := 2.5         ## Сколько % цены теряет за секунду в воде
 ## Как держат в руках: 0 — по размеру; 1 — лёгкая (под мышкой, одной рукой);
@@ -292,7 +293,11 @@ func server_return_to_path() -> void:
 	_prev_velocity = Vector3.ZERO
 	if Network.is_online():
 		_net_state.rpc(global_position, quaternion)
-	get_tree().call_group("level", "announce", "«%s» возвращён на тропу" % display_name, "Его вынесло к тропе")
+	# объявляем не чаще раза в 10 с на посылку (иначе надпись могла висеть без конца)
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _return_announced > 10.0:
+		_return_announced = now
+		get_tree().call_group("level", "announce", "«%s» возвращён на тропу" % display_name, "Его вынесло к тропе")
 
 
 func _send_state(delta: float) -> void:

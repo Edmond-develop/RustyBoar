@@ -46,6 +46,8 @@ signal landed(fall_speed: float)
 @export var skate_push := 0.16         ## Каток: как быстро разгоняешься (доля от обычного разгона)
 @export var skate_glide := 0.02        ## Каток: как быстро тормозишь без кнопок (меньше — дольше катишься)
 @export var skate_speed_mult := 1.3    ## Каток: насколько быстрее можно разогнаться
+@export var ice_speed_mult := 1.1      ## Обычный лёд: на «коньках» чуть быстрее
+@export var ice_glide := 0.7           ## Обычный лёд: торможение без кнопок (меньше — дольше катишься)
 
 @export_group("Выносливость")
 @export var sprint_hold_time := 0.12
@@ -64,7 +66,7 @@ signal landed(fall_speed: float)
 @export var wall_damage := 3.0
 @export var fall_damage_speed := 12.0
 @export var fall_damage := 6.0
-@export var respawn_delay := 1.8
+@export var respawn_delay := 5.6
 @export var invulnerable_time := 1.5
 
 @export_group("Вода")
@@ -162,8 +164,10 @@ const ROPE := preload("res://scenes/player/rope_tool.gd")
 const INVENTORY_UI := preload("res://scenes/ui/inventory_ui.gd")
 const THROW_METER := preload("res://scenes/ui/throw_meter.gd")
 const LIMB_PARTS := preload("res://scenes/props/limb_parts.gd")
-const BODY_STATUS := preload("res://scenes/ui/body_status.gd")
+const SNOW_STATE := preload("res://scenes/player/snow_state.gd")
+const FP_VIEW := preload("res://scenes/player/fp_view.gd")
 const GAUGES := preload("res://scenes/ui/gauge_panel.gd")
+const DEATH_SHADER := preload("res://shaders/death_screen.gdshader")
 const REPAIR_TIME := 3.4         ## Сколько держать E, чтобы прикрутить деталь другу (вставить, 4 болта, провода, проверка)
 const RIP_TIME := 2.6            ## Сколько держать F, чтобы оторвать другу руку/ногу (4 болта вылетают по одному)
 const FLOP_TIME := 1.7           ## Бросили — плюхнулся на спину: сколько лежу и встаю
@@ -191,6 +195,13 @@ const F_DIVE := 1024
 const F_TUMBLE := 2048
 const F_FLOP := 65536            ## (биты 12–15 — руки/ноги, 17–20 — что из них вмёрзло)
 const ICE_STAGES := [0.25, 0.5, 0.75]   ## обледенение: 1-я нога, 2-я нога, рука (100% — глыба)
+const F_SIT := 1 << 21
+const F_BELLY := 1 << 22
+const F_SWEPT := 1 << 23          ## лавина несёт
+const F_BURIED := 1 << 24         ## завалило снегом
+const F_DEEP := 1 << 25           ## иду по рыхлому снегу после лавины
+const SIT_TIME := 0.6            ## садится / встаёт
+const BELLY_MAX := 12.0          ## быстрее на пузе не разогнаться
 
 @onready var visual: Node3D = $Visual
 @onready var body: Node3D = $Visual/Body
@@ -309,6 +320,7 @@ var _roll_basis := Basis.IDENTITY
 var _roll_last := Vector3.ZERO
 var _body_shape: Shape3D = null
 var _push_point := Vector3.ZERO  ## куда упираюсь руками (толкаю/качу глыбу)
+var external_push := Vector3.ZERO ## упираюсь руками в предмет мира (камень у пещеры) — ставит сам предмет
 var _push_send_t := 0.0
 var _vis_frozen := false
 var _ice_warn_t := 0.0           ## лёд под ногами трещит паутиной — балансирую
@@ -335,8 +347,28 @@ var _act_bolts := 0              ## сколько болтов уже выле�
 var _act_tail := 0               ## сколько раз ещё отправить «ничего не делаю»
 var _flop_t := 0.0               ## лежу на спине после броска
 var _flail_pitch := 0.0
+var _quiet_t := 0.0
+var _wind_hold := Vector3.ZERO
+var _quiet_moved := false
 var _lock_t := 0.0               ## короткая блокировка управления (отлетел после рывка)
-var body_status: Control
+var _death_t := 0.0             ## сколько уже лежу сломанным (анимация смерти)
+var _death_fx: ColorRect          ## экран тускнеет, помехи
+var _wear_stage := 0             ## сколько «четвертей» корпуса уже потеряно (для следов износа)
+var _anim_skip_dt := 0.0
+var sitting := false             ## сижу на снегу (Ctrl стоя): отдыхаю
+var air_cold := 0.0              ## обмерзание на воздухе (в метели), ед./с — ставит метель каждый кадр
+var _sit_k := 0.0                ## 0 — стою, 1 — сижу (плавно)
+var _sit_t := 0.0
+var _plopped := false
+var belly := false               ## скольжу на пузе (Ctrl на бегу)
+var _belly_k := 0.0
+var _belly_t := 0.0
+var _belly_slow := 0.0
+var _belly_lead: Node3D = null   ## держусь за ботинки друга — едем паровозиком
+var _paddle := 0.0               ## гребу руками
+var _getup_t := 0.0              ## встаю с пуза
+var _anim_frame := 0
+var _death_mat: ShaderMaterial
 var _visor: ColorRect            ## иней и капли на стекле визора (свой экран)
 var _visor_mat: ShaderMaterial
 var _visor_wet := 0.0
@@ -357,12 +389,23 @@ var _uw: Node = null
 
 # Скафандр и следы
 var suit: Node3D                ## exo_suit.gd
+var ice_axes := false           ## шаг 77: в руках ледорубы (мышь — удары ими, верёвка не работает)
+var glacier_probe := false      ## шаг 86: в связке на леднике, в руке щуп (ПКМ — щупать, верёвка-кошка не работает)
+var force_belly := 0.0          ## шаг 87: гора кладёт на живот (держу сорвавшегося) — у всех
+var force_paddle := 0.0
+var force_belly_spd := 0.0
+var force_dive := 0.0           ## шаг 88: утащило через край — головой вниз
+var rope_hold := false          ## шаг 89: держу верёвку правой (спасаю из трещины)
+var fp_roll := 0.0              ## шаг 89: крен камеры от 1-го лица (тащит по снегу)
+var impact_soft := false        ## шаг 79: в пропасти с выступами удары о скалу и падения мягкие (без потери рук-ног)
 var _icicle_base: Array[Vector3] = []
 var _burn_timer := 0.0
 var _vis_parcel: Node3D = null  ## посылка в руках (и у копий — ищем сами)
 var _vis_mode := 0
 var _vis_parcel_t := 0.0
 var _no_sprint := false
+var no_jump := false                ## шаг 99: на шатком подвесном мосту — не прыгнуть и не бежать
+var no_sprint := false              ## шаг 106: на мосту не бежать (прыгать можно)
 
 # Боты-курьеры (тот же дрон, но управляет «мозг» courier_brain.gd, только у хоста)
 var is_bot := false
@@ -377,8 +420,13 @@ var _claimed_slot := -1         ## для Ледяного вала (куда в
 # Инвентарь и верёвка
 var items: Array[String] = ["rope"]
 var rope: Node3D                ## rope_tool.gd (узел "Rope")
+var snow: Node3D                ## snow_state.gd (узел "SnowState"): лавина, сугроб, снежные роботы
+var on_deep_snow := false       ## стою в рыхлом снегу после лавины (медленнее, прыжок ниже)
+var fp_view := false            ## вид от первого лица (fp_view.gd): тело смотрит туда же, куда камера
+var _deep_t := 0.0
 var throw_meter: Control         ## шкала силы броска (только свой дрон)
 var _charge := -1.0              ## держу Q: 0..1 (−1 — не замахиваюсь)
+var _spin_acc := 0.0             ## шаг 124: раскрутка друга — набежавший угол (для толчков камеры)
 var _throw_dots: MultiMeshInstance3D
 var _throw_ring: MeshInstance3D
 var _throw_land := Vector3.INF
@@ -386,7 +434,11 @@ var inventory_ui: CanvasLayer
 
 # Друзья: поднять над головой и кинуть, вытащить из полыньи рукой
 var carried_by: Node3D = null   ## кто держит меня над головой
+var _spun_k := 0.0               ## шаг 124: меня раскручивают как молот (0..1)
 var held_friend: Node3D = null  ## кого держу я
+var _swap_kind := ""            ## шаг 85: что беру после того, как бросил своё
+var _swap_obj: Object = null
+var _swap_t := 0.0
 var _tumble := false            ## кувыркаюсь после броска
 var _struggle := 0
 var _held_t := 0.0
@@ -487,10 +539,6 @@ func _ready() -> void:
 	_make_water_fx()
 	_make_throw_aim()
 	(func(): LIMB_PARTS.get_manager(get_tree())).call_deferred()
-	body_status = Control.new()
-	body_status.set_script(BODY_STATUS)
-	body_status.set("player", self)
-	carry_hud.add_child(body_status)
 	_setup_dashboard.call_deferred()
 	throw_meter = Control.new()
 	throw_meter.set_script(THROW_METER)
@@ -503,6 +551,14 @@ func _ready() -> void:
 	_visor.material = _visor_mat
 	carry_hud.add_child(_visor)
 	carry_hud.move_child(_visor, 0)
+	snow = Node3D.new()
+	snow.set_script(SNOW_STATE)
+	snow.name = "SnowState"
+	add_child(snow)
+	var fpv := Node.new()
+	fpv.set_script(FP_VIEW)
+	fpv.name = "FPView"
+	add_child(fpv)
 	rope = Node3D.new()
 	rope.set_script(ROPE)
 	rope.name = "Rope"
@@ -622,15 +678,22 @@ func _setup_dashboard() -> void:
 	for r in [stability_row, stamina_row, health_bar.get_parent(), _frost_row]:
 		if r != null and is_instance_valid(r):
 			(r as Node).reparent(legacy)
-	var panel := $CarryHUD/Panel as Control
-	panel.offset_top -= 150.0
-	panel.offset_bottom = -174.0
 	var g := Control.new()
 	g.name = "Gauges"
 	g.set_script(GAUGES)
 	g.set("player", self)
 	carry_hud.add_child(g)
 	carry_hud.move_child(g, 1)
+	_death_mat = ShaderMaterial.new()
+	_death_mat.shader = DEATH_SHADER
+	_death_fx = ColorRect.new()
+	_death_fx.name = "DeathScreen"
+	_death_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_death_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_death_fx.material = _death_mat
+	_death_fx.visible = false
+	carry_hud.add_child(_death_fx)
+	carry_hud.move_child(_death_fx, death_label.get_index())
 
 
 ## Ледяная корка (поверх всех деталей дрона), сосульки и глыба для полной заморозки
@@ -734,6 +797,8 @@ func _physics_process(delta: float) -> void:
 		if _dead_timer <= 0.0:
 			respawn()
 			return
+		_dead_process(delta)
+		return
 
 	# --- Друзья: меня держат / спасают / я спасаю ---
 	if carried_by != null:
@@ -744,6 +809,9 @@ func _physics_process(delta: float) -> void:
 		return
 	if rescue_role == 1:
 		_rescuer_process(delta)
+		return
+	if snow.busy():
+		snow.locked_process(delta)
 		return
 
 	# --- Вода и холод ---
@@ -790,10 +858,11 @@ func _physics_process(delta: float) -> void:
 		_jump_buffer_timer -= delta
 
 	var heavy_single := mode == 1 and held_parcel != null and held_parcel.carry_weight() >= 3
-	var can_jump := not paused and not staggered and not is_dead and mode < 2 and not heavy_single and held_friend == null and not downed \
-		and legs_count() > 0
+	var can_jump := not paused and not staggered and not is_dead and not sitting and not belly and _getup_t <= 0.0 and _sit_k < 0.05 and mode < 2 and not heavy_single and held_friend == null and not downed \
+		and legs_count() > 0 and not no_jump
 	if can_jump and _jump_buffer_timer > 0.0 and _coyote_timer > 0.0:
-		velocity.y = jump_velocity * (carry_jump_mult if mode == 1 else 1.0) * lerpf(1.0, 0.65, _frost_ratio()) * (0.75 if legs_count() == 1 else 1.0)
+		velocity.y = jump_velocity * (carry_jump_mult if mode == 1 else 1.0) * lerpf(1.0, 0.65, _frost_ratio()) * (0.75 if legs_count() == 1 else 1.0) \
+			* (0.72 if on_deep_snow else 1.0)
 		_jump_buffer_timer = 0.0
 		_coyote_timer = 0.0
 		_thruster_power = 6.0
@@ -814,6 +883,10 @@ func _physics_process(delta: float) -> void:
 				_roll_call(rolling_block, false, Vector3(velocity.x, 0.0, velocity.z) * 1.1)
 			elif held_friend:
 				_put_friend_down()
+			elif held_parcel and _try_socket():
+				pass
+			elif _try_swap():
+				pass                     # шаг 85: в руках что-то, рядом другое — бросил своё, беру то
 			elif held_parcel:
 				_put_down()
 			elif held_limb != null:
@@ -824,6 +897,10 @@ func _physics_process(delta: float) -> void:
 					_repair_t = 0.0
 				else:
 					_drop_limb(Vector3(velocity.x, 0.5, velocity.z))
+			elif snow.try_interact():
+				pass
+			elif _try_socket():
+				pass
 			elif _try_grab_block():
 				pass
 			elif _try_hand_rescue():
@@ -832,6 +909,8 @@ func _physics_process(delta: float) -> void:
 				pass
 			elif _try_pick_up():
 				pass
+			elif ice_axes and _drop_axes():
+				pass                     # шаг 142: E — положить ледорубы (поднять — снова E)
 			else:
 				_try_lift_friend()
 		elif _just("rip") and _rip_target == null and arms_count() > 0 and held_limb == null \
@@ -846,11 +925,25 @@ func _physics_process(delta: float) -> void:
 				_do_throw(0.85)          # бот бросает сразу
 			else:
 				_charge = 0.0            # замах: чем дольше держу Q, тем сильнее
+	_swap_tick(delta)
 	_limb_actions(delta)
+	snow.tick(delta)
 	_ripped_process(delta)
+	_sit_belly_input(delta)
 	if _charge >= 0.0:
 		if not _can_throw() or is_dead:
 			_charge = -1.0
+		elif _held("throw") and held_friend != null and snow.held_bot == null:
+			# шаг 124: «молот» — раскручиваю друга вокруг себя, всё быстрее; отпустил Q — улетает туда, куда смотрю
+			_charge = minf(_charge + delta / (THROW_CHARGE_TIME * 1.9), 1.0)
+			var w := lerpf(3.0, 13.5, _charge * _charge * (3.0 - 2.0 * _charge))
+			visual.rotation.y = wrapf(visual.rotation.y - w * delta, -PI, PI)
+			_spin_acc += w * delta
+			if _spin_acc > PI:
+				_spin_acc -= PI
+				_noise_burst += 0.15
+				if controlled:
+					_shake = maxf(_shake, 0.04 + 0.1 * _charge)
 		elif _held("throw"):
 			_charge = minf(_charge + delta / THROW_CHARGE_TIME, 1.0)
 			var aim := _throw_aim_dir()
@@ -875,7 +968,7 @@ func _physics_process(delta: float) -> void:
 	var has_input := direction.length() > 0.1
 
 	# --- Выносливость и скорость ---
-	_no_sprint = held_friend != null or (mode == 1 and held_parcel != null and held_parcel.carry_weight() >= 3) or legs_count() < 2
+	_no_sprint = held_friend != null or (mode == 1 and held_parcel != null and held_parcel.carry_weight() >= 3) or legs_count() < 2 or no_jump or no_sprint
 	_update_stamina(delta, has_input, mode > 0)
 	exhausted = _exhausted_timer > 0.0
 
@@ -904,15 +997,36 @@ func _physics_process(delta: float) -> void:
 		and (_floor_collider as Object).has_meta("skate")
 	if skating:
 		target_speed *= skate_speed_mult
+	# рыхлый снег после лавины: вязнешь
+	# (держится 0.35 с: пока под ногами перестраивается кусок снега, опора на миг пропадает)
+	if on_floor and _floor_collider is Object and is_instance_valid(_floor_collider) \
+			and (_floor_collider as Object).has_meta("deep_snow"):
+		_deep_t = 0.35
+	else:
+		_deep_t -= get_physics_process_delta_time()
+	on_deep_snow = _deep_t > 0.0
+	if on_deep_snow:
+		# шаг 137: вязнешь почти по пояс — бежать нельзя, идёшь тяжело; по протоптанной траншее — легче
+		var sl = get_tree().get_first_node_in_group("snow_layer")
+		var trench: bool = sl != null and sl.in_trench(global_position.x, global_position.z)
+		target_speed = minf(target_speed, walk_speed) * (0.8 if trench else 0.55)
+	# Любой другой скользкий лёд: катимся как на коньках — чуть быстрее и чуть дольше по инерции
+	var ice_skate := on_floor and not skating and surface_grip < 0.5 and not belly
+	if ice_skate and has_input:
+		target_speed *= ice_speed_mult
 
 	var target_velocity := direction * target_speed
 	_update_push(direction, target_speed, has_input, delta)
-	_last_wind = Vector3(_wind.x, 0.0, _wind.z)
+	# ветер нарастает быстро, а стихает медленно (дрона ещё какое-то время сносит)
+	var w_now := Vector3(_wind.x, 0.0, _wind.z)
+	var k_w := 7.0 if w_now.length() >= _wind_hold.length() else 0.9
+	_wind_hold = _wind_hold.lerp(w_now, clampf(delta * k_w, 0.0, 1.0))
+	_last_wind = _wind_hold
 	if _brace:
 		_last_wind *= 0.55     # в стойке дрон упирается — сносит слабее
 	_wind = Vector3.ZERO
 	target_velocity += _last_wind
-	if act_mode != 0 and act_target != null and is_instance_valid(act_target):
+	if (act_mode == 1 or act_mode == 2) and act_target != null and is_instance_valid(act_target):
 		# встаю на удобное расстояние: упереться ногой / дотянуться до гнезда
 		var away := global_position - act_target.global_position
 		away.y = 0.0
@@ -922,6 +1036,8 @@ func _physics_process(delta: float) -> void:
 		to_spot.y = 0.0
 		target_velocity = (to_spot * 6.0).limit_length(2.5)
 
+	if sitting or _getup_t > 0.0 or _sit_k > 0.05:
+		target_velocity = _last_wind * (0.4 if sitting else 1.0)    # сижу — ветер почти не сдвигает
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var rate := acceleration if (has_input or _last_wind.length() > 0.1) else deceleration
 	if mode > 0:
@@ -932,11 +1048,16 @@ func _physics_process(delta: float) -> void:
 		rate = acceleration * 0.04   # подбросило трамплином/гейзером — летим по инерции
 	else:
 		rate *= surface_grip if on_floor else air_control
+		if ice_skate and not has_input:
+			rate *= ice_glide
 	if staggered:
 		rate *= 0.15
-	horizontal = horizontal.move_toward(target_velocity, rate * delta)
-	velocity.x = horizontal.x
-	velocity.z = horizontal.z
+	if belly:
+		_belly_move(delta, input_dir, on_floor)
+	else:
+		horizontal = horizontal.move_toward(target_velocity, rate * delta)
+		velocity.x = horizontal.x
+		velocity.z = horizontal.z
 
 	# На скользком склоне дрон съезжает вниз (и разгоняется на ледяных спусках)
 	if on_floor and surface_grip < 0.5:
@@ -987,7 +1108,7 @@ func _physics_process(delta: float) -> void:
 	_was_on_floor = now_on_floor
 	_prev_velocity = velocity
 
-	if global_position.y < fall_limit_y:
+	if global_position.y < fall_limit_y and not is_swimming and not is_diving:
 		velocity = Vector3.ZERO
 		if not is_dead:
 			_die()
@@ -1022,6 +1143,11 @@ func _send_state(delta: float) -> void:
 	if _flop_t > 0.0: flags |= F_FLOP
 	flags |= limb_mask << 12
 	flags |= ice_mask << 17
+	if sitting: flags |= F_SIT
+	if belly: flags |= F_BELLY
+	if snow.swept: flags |= F_SWEPT
+	if snow.buried: flags |= F_BURIED
+	if on_deep_snow: flags |= F_DEEP
 	if act_mode != 0:
 		_act_tail = 8
 	if act_mode != 0 or _act_tail > 0:
@@ -1105,6 +1231,11 @@ func _puppet_process(delta: float) -> void:
 	if nm != limb_mask:
 		limb_mask = nm               # подключился позже — вид рук/ног как у хозяина
 		suit.set_limbs(nm)
+	sitting = (_net_flags & F_SIT) != 0
+	belly = (_net_flags & F_BELLY) != 0
+	snow.swept = (_net_flags & F_SWEPT) != 0
+	snow.buried = (_net_flags & F_BURIED) != 0
+	on_deep_snow = (_net_flags & F_DEEP) != 0
 	var im := (_net_flags >> 17) & 15
 	if im != ice_mask:
 		ice_mask = im
@@ -1163,6 +1294,14 @@ func get_noise() -> float:
 	return noise
 
 
+## Шаг 74: E у гнезда механизма (поставить/снять деталь) или у щита с трубами (повернуть колено)
+func _try_socket() -> bool:
+	for n in get_tree().get_nodes_in_group("part_sockets"):
+		if n.try_socket(self):
+			return true
+	return false
+
+
 func get_held_parcel() -> Parcel:
 	return held_parcel
 
@@ -1206,13 +1345,32 @@ func on_parcel_holders_changed(p: Parcel) -> void:
 func take_damage(amount: float, kind: String = "", point: Vector3 = Vector3.INF) -> void:
 	if not is_local or is_dead or _invuln_timer > 0.0 or amount <= 0.0:
 		return
+	if impact_soft and kind in ["hit", "fall", "thrown", ""]:
+		amount *= 0.15
 	health = maxf(health - amount, 0.0)
 	health_changed.emit(health, max_health)
 	damage_flash.color.a = clampf(0.15 + amount * 0.01, 0.15, 0.45)
 	_damage_marks(amount, kind, point)
+	_wear_marks()
+	if amount >= 4.0 and sitting:
+		_stand_up()
 	_maybe_lose_limb(amount, kind, point)
 	if health <= 0.0:
 		_die()
+
+
+## Чем меньше корпуса, тем потрёпаннее: каждая потерянная четверть — ещё горсть вмятин и царапин
+func _wear_marks() -> void:
+	var stage := int(floor((1.0 - health / max_health) * 4.0 + 0.001))
+	if stage <= _wear_stage:
+		return
+	var center := global_position + Vector3.UP * BODY_HEIGHT
+	while _wear_stage < stage:
+		_wear_stage += 1
+		for k in 3:
+			var off := Vector3(randf_range(-0.32, 0.32), randf_range(-0.95, 0.5), randf_range(-0.28, 0.28))
+			var kind := SUIT.Mark.SCRATCH if k != 1 else SUIT.Mark.DENT
+			_mark(kind, center + visual.global_basis * off, randf_range(0.08, 0.13), 0.0)
 
 
 ## Следы на броне (у себя и — по сети — у копий)
@@ -1225,7 +1383,7 @@ func _damage_marks(amount: float, kind: String, point: Vector3) -> void:
 			if _burn_timer > 0.0:
 				return
 			_burn_timer = 0.3
-			_mark(SUIT.Mark.BURN, point if point != Vector3.INF else center, 0.08, 1.0)
+			_mark(SUIT.Mark.BURN, point if point != Vector3.INF else center, 0.11, 1.0)
 			if randf() < 0.3:
 				suit.emote(SUIT.Mood.HURT, 0.4)
 			return
@@ -1250,8 +1408,8 @@ func _damage_marks(amount: float, kind: String, point: Vector3) -> void:
 			# столкновение: царапины вдоль удара, сильное — ещё и вмятина
 			var at := point if point != Vector3.INF else center
 			_mark(SUIT.Mark.SCRATCH, at, r * 2.0, 0.0)
-			if amount >= 6.0:
-				_mark(SUIT.Mark.DENT, at, r, 0.0)
+			if amount >= 4.0:
+				_mark(SUIT.Mark.DENT, at, r * 1.35, 0.0)
 			if point != Vector3.INF and point.y > global_position.y + 1.4:
 				_mark(10, center, 0.12, 0.0)
 		"thrown":
@@ -1278,7 +1436,7 @@ func _apply_mark(kind: int, point: Vector3, radius: float, heat: float) -> void:
 		return
 	if kind == SUIT.Mark.BURN:
 		heat = 1.0
-	suit.add_mark(kind, point, radius, 1.0 if kind != SUIT.Mark.BURN else 0.45, heat)
+	suit.add_mark(kind, point, radius, 1.0 if kind != SUIT.Mark.BURN else 0.8, heat)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -1384,6 +1542,7 @@ func add_shake(amount: float) -> void:
 
 
 func respawn() -> void:
+	snow.reset()
 	global_position = _spawn_position
 	velocity = Vector3.ZERO
 	_prev_velocity = Vector3.ZERO
@@ -1408,12 +1567,34 @@ func respawn() -> void:
 	death_label.text = _default_death_text
 	health_changed.emit(health, max_health)
 	suit.clear_marks()
+	_wear_stage = 0
 	if _online():
 		_net_respawned.rpc()
 	respawned.emit()
 
 
+## Сломан: тело падает (гравитация), анимация «отказ систем», камера и интерфейс живут
+func _dead_process(delta: float) -> void:
+	var still := is_frozen or is_diving or is_swimming or carried_by != null
+	if not still:
+		if not is_on_floor():
+			velocity += get_gravity() * fall_gravity_mult * delta
+		velocity.x = move_toward(velocity.x, 0.0, 6.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 6.0 * delta)
+		move_and_slide()
+	else:
+		velocity = Vector3.ZERO
+	var on_floor := is_on_floor()
+	var just_landed := on_floor and not _was_on_floor
+	_was_on_floor = on_floor
+	_update_visual(delta, Vector3.ZERO, walk_speed, just_landed)
+	_update_camera(delta)
+	_update_hud()
+	_send_state(delta)
+
+
 func _die() -> void:
+	snow.reset()
 	is_dead = true
 	_dead_timer = respawn_delay
 	is_sprinting = false
@@ -1460,6 +1641,8 @@ func _frost_tick(delta: float, water_depth: float) -> void:
 		var rate := freeze_rate
 		if is_diving:
 			rate = dive_freeze_rate + dive_freeze_per_m * water_depth
+		# Глубокое озеро у ворот подогревают ключи со дна — там стынешь вчетверо медленнее
+		rate *= IceRiver.water_cold(global_position.x, global_position.z)
 		frost += rate * delta
 	elif doomed:
 		# за чертой: лёд сам дорастает до глыбы — даже на суше и у огня
@@ -1469,9 +1652,11 @@ func _frost_tick(delta: float, water_depth: float) -> void:
 	elif _wet_timer > 0.0 and _heat <= 1.0:
 		_wet_timer -= delta          # мокрый корпус на морозе ещё обмерзает
 		frost += wet_freeze * delta
+	elif air_cold > 0.0 and _heat <= 1.0:
+		frost += air_cold * delta    # метель (snow storm): медленно обмерзаешь — отогреться у огня
 	else:
 		_wet_timer = 0.0
-		frost -= (fire_thaw_rate if _heat > 1.0 else thaw_rate) * delta
+		frost -= (fire_thaw_rate * (1.7 if sitting else 1.0) if _heat > 1.0 else thaw_rate) * delta
 	frost = clampf(frost, 0.0, frost_max)
 	_update_ice_mask()
 	if frost >= frost_max:
@@ -1961,8 +2146,8 @@ func _enter_water() -> void:
 	_splash_fx.restart()
 	if _online():
 		_net_splash_fx.rpc(splash_pos)
-	# Посылка выскальзывает из рук и плавает рядом
-	if held_parcel != null:
+	# Посылка выскальзывает из рук и плавает рядом (детали ворот — водонепроницаемые, их держим)
+	if held_parcel != null and not held_parcel.get("dive_ok"):
 		held_parcel.take_damage(5.0)
 		_release_held(held_parcel.global_transform, Vector3(velocity.x * 0.3, 0.5, velocity.z * 0.3))
 
@@ -2009,8 +2194,15 @@ func _dive_process(delta: float) -> void:
 	_frost_tick(delta, depth)
 	if is_frozen:
 		return
-	if held_parcel != null:
+	var carrying_part: bool = held_parcel != null and bool(held_parcel.get("dive_ok"))
+	if held_parcel != null and not carrying_part:
 		_release_held(held_parcel.global_transform, Vector3(0, 0.5, 0))
+	# под водой E — взять со дна деталь ворот / отпустить её
+	if _just("interact"):
+		if held_parcel != null:
+			_release_held(held_parcel.global_transform, Vector3.ZERO)
+		else:
+			_try_pick_up()
 
 	var fr := _frost_ratio()
 	var roped: Node = rope.roped_by(self)
@@ -2020,9 +2212,10 @@ func _dive_process(delta: float) -> void:
 	# чем дольше в ледяной воде — тем тяжелее всплывать
 	var tired := clampf(_water_time / water_tire_time, 0.0, 1.0)
 	var rising := (_held("jump") and _plunge_t <= 0.0) or roped != null
-	var target_vy := -sink_speed * (1.0 + 0.6 * fr)
+	var target_vy := -sink_speed * (1.0 + 0.6 * fr) * (1.3 if carrying_part else 1.0)
 	if rising:
-		target_vy = rise_speed * lerpf(1.0, 0.5, fr) * lerpf(1.0, 0.35, tired)
+		# с тяжёлой деталью всплываешь медленнее
+		target_vy = rise_speed * lerpf(1.0, 0.5, fr) * lerpf(1.0, 0.35, tired) * (0.6 if carrying_part else 1.0)
 		if roped != null:
 			target_vy = rise_speed * 1.2
 	var acc := 4.0 if target_vy > velocity.y else 2.5
@@ -2233,13 +2426,28 @@ func _update_camera(delta: float) -> void:
 	var arm := lerpf(5.3 if running else 4.7, 7.0, _speed_fx)
 	if is_diving:
 		arm = 3.4    # под водой мутно — камера ближе к дрону
+	if is_dead:
+		arm = 3.3
+		camera_pivot.rotation.y += delta * 0.22 * clampf(_death_t - 0.5, 0.0, 1.0)
+		camera_pivot.rotation.x = lerp_angle(camera_pivot.rotation.x, -0.32, clampf(delta * 1.5, 0.0, 1.0))
+		if absf(_death_t - SUIT.D_HIT) < 0.05:
+			_shake = maxf(_shake, 0.3)
 	spring_arm.spring_length = lerpf(spring_arm.spring_length, arm, 4.0 * delta)
 	_shake = maxf(_shake - delta * 1.2, 0.0)
 	var shake := _shake + _speed_fx * 0.035
 	if running and is_on_floor():
 		shake += 0.012
-	camera.h_offset = randf_range(-1.0, 1.0) * shake
-	camera.v_offset = randf_range(-1.0, 1.0) * shake
+	if fp_view:
+		shake *= 0.35           # от 1-го лица тряска — сама камера, мягче
+		var gcl := int(snow.climb)
+		if snow.busy() and force_belly < 0.05 and gcl != 12 and gcl != 14:
+			shake = 0.0         # несёт лавина / в сугробе / в капсуле — без тряски, только плавное покачивание
+		elif force_belly >= 0.05:
+			shake *= 1.8        # шаг 89: тащит верёвкой по снегу — трясёт сильно
+	# плавная тряска (сумма синусов), а не случайный скачок каждый кадр — глаз не режет
+	var tt := _time
+	camera.h_offset = (sin(tt * 37.0) * 0.6 + sin(tt * 23.0 + 1.3) * 0.4) * shake
+	camera.v_offset = (sin(tt * 31.0 + 0.7) * 0.6 + sin(tt * 19.0 + 2.1) * 0.4) * shake
 
 
 # ---------------------------------------------------------------------------
@@ -2276,8 +2484,10 @@ func _update_stamina(delta: float, has_input: bool, carrying: bool) -> void:
 				instability += 0.2
 	else:
 		_regen_timer -= delta
+		if sitting and _sit_k > 0.9:
+			_regen_timer = minf(_regen_timer, 0.0)     # сижу — отдыхаю сразу и быстрее
 		if _regen_timer <= 0.0:
-			stamina = minf(stamina + stamina_regen * delta, stamina_max)
+			stamina = minf(stamina + stamina_regen * delta * (2.5 if sitting else 1.0), stamina_max)
 
 
 func _update_noise(delta: float, has_input: bool) -> void:
@@ -2351,7 +2561,14 @@ func _handle_collisions(pre_velocity: Vector3, delta: float) -> void:
 
 	if strongest > hit_threshold:
 		var dmg := (strongest - hit_threshold + 2.0) * wall_damage
-		_take_impact(hit_normal, strongest, hit_point, wall_knockback, dmg, "hit")
+		if belly:
+			dmg *= 0.5              # на пузе — шлёпнулся мягче
+			_belly_end()
+		if impact_soft:
+			# шаг 79: в пропасти — не отбрасывает от скалы (чтобы успеть вбить ледоруб)
+			_take_impact(hit_normal, minf(strongest, 4.0), hit_point, wall_knockback * 0.15, dmg, "hit")
+		else:
+			_take_impact(hit_normal, strongest, hit_point, wall_knockback, dmg, "hit")
 
 
 func _take_impact(push_dir: Vector3, strength: float, contact: Vector3, knock_mult: float, health_damage: float, kind: String = "hit") -> void:
@@ -2414,13 +2631,20 @@ func _find_nearest_parcel() -> Parcel:
 func _try_pick_up() -> bool:
 	if _pickup_cooldown > 0.0 or _stagger_timer > 0.0 or is_dead or held_parcel != null or held_limb != null:
 		return false
-	if arms_count() < 2:
-		return false              # одной рукой груз не поднять
+	if arms_count() == 0:
+		return false
 	var p := _find_nearest_parcel()
 	if p == null:
 		return false
+	if arms_count() < 2 and not _one_hand_ok(p):
+		return false              # одной рукой — только самые лёгкие
 	grab_parcel(p)
 	return true
+
+
+## Можно ли нести одной рукой: только лёгкие посылки на одного
+func _one_hand_ok(p: Parcel) -> bool:
+	return p != null and p.required_carriers <= 1 and p.carry_weight() <= 1
 
 
 ## Взять конкретную посылку (подтянул верёвкой, бот и т.п.)
@@ -2456,7 +2680,7 @@ func _throw(power := 0.8) -> void:
 #  Пунктир показывает, куда упадёт.
 # ---------------------------------------------------------------------------
 func _can_throw() -> bool:
-	return held_friend != null or rolling_block != null or held_limb != null or (held_parcel != null and _carry_mode() == 1 and not _releasing)
+	return snow.held_bot != null or held_friend != null or rolling_block != null or held_limb != null or (held_parcel != null and _carry_mode() == 1 and not _releasing)
 
 
 func _throw_power(c: float) -> float:
@@ -2464,7 +2688,9 @@ func _throw_power(c: float) -> float:
 
 
 func _do_throw(power: float) -> void:
-	if held_limb != null and _repair_target == null:
+	if snow.held_bot != null:
+		snow.throw_bot(power)
+	elif held_limb != null and _repair_target == null:
 		suit.throw_anim()
 		_drop_limb(_throw_aim_dir() * (2.5 + 6.0 * power) + Vector3.UP * (1.5 + 2.0 * power) + Vector3(velocity.x, 0.0, velocity.z) * 0.5)
 	elif rolling_block:
@@ -2552,7 +2778,10 @@ func _update_throw_aim() -> void:
 	var vel: Vector3
 	var g_up := 9.8
 	var g_down := 9.8
-	if held_friend:
+	if snow.held_bot != null:
+		from = snow.hold_xform().origin
+		vel = snow.bot_throw_vel(pw)
+	elif held_friend:
 		from = held_friend.global_position + Vector3.UP * 0.5
 		vel = _friend_throw_vel(pw)
 		g_up = 9.8 * rise_gravity_mult
@@ -2684,8 +2913,82 @@ func ice_warning(_center: Vector3) -> void:
 		suit.emote(SUIT.Mood.HURT, 1.2)
 
 
+var _hill_n := Vector3.UP
+var _hill_yaw := 0.0
+var _hill_sw := 0.0
+var _hill_ter: Node = null
+
+
+## Шаг 139: Снежная гора — 50 бугель, 51 сноуборд (нос доски — +X тела), 52 кувырок
+func _hill_visual(delta: float) -> void:
+	var mp := int(snow.mpose)
+	var dirv: Vector3 = snow.mpose_dir
+	dirv.y = 0.0
+	if dirv.length() < 0.01:
+		dirv = -visual.global_basis.z
+	dirv = dirv.normalized()
+	var target_yaw := atan2(-dirv.x, -dirv.z)
+	if mp == 51:
+		target_yaw += PI * 0.5
+	_hill_yaw = target_yaw if is_local else lerp_angle(_hill_yaw, target_yaw, clampf(delta * 14.0, 0.0, 1.0))
+	var n := Vector3.UP
+	if mp == 51 and float(snow.mpose_k) < 0.5:
+		if is_local and is_on_floor():
+			n = get_floor_normal()
+		else:
+			if _hill_ter == null:
+				_hill_ter = get_tree().get_first_node_in_group("terrain")
+			if _hill_ter != null:
+				var p := global_position
+				var hx: float = _hill_ter.height_at(p.x + 0.7, p.z) - _hill_ter.height_at(p.x - 0.7, p.z)
+				var hz: float = _hill_ter.height_at(p.x, p.z + 0.7) - _hill_ter.height_at(p.x, p.z - 0.7)
+				n = Vector3(-hx, 1.4, -hz).normalized()
+	_hill_n = _hill_n.lerp(n, clampf(delta * 6.0, 0.0, 1.0)).normalized()
+	match mp:
+		50:
+			# вишу на перекладине: тело — маятник вокруг рук (mpose_k — угол качания)
+			var sw := float(snow.mpose_k)
+			_hill_sw = sw if is_local else lerpf(_hill_sw, sw, clampf(delta * 8.0, 0.0, 1.0))
+			var rb := Basis(Vector3.UP, _hill_yaw) * Basis(Vector3.RIGHT, _hill_sw) * Basis(Vector3.FORWARD, sin(_time * 1.3) * 0.035)
+			var c := Vector3(0.0, 2.02, 0.0)
+			visual.transform = Transform3D(rb, c - rb * c)
+		51:
+			var edge: float = (snow.mpose_pt as Vector3).x
+			# от 1-го лица крен на канте мягче (камера в голове — иначе качает)
+			var ek := 0.17 if fp_view else 0.3
+			var b := Basis(Quaternion(Vector3.UP, _hill_n)) * Basis(Vector3.UP, _hill_yaw) * Basis(Vector3.RIGHT, -edge * ek)
+			# доска под ногами — на снегу, а не в нём: тело чуть выше
+			visual.transform = Transform3D(b, b.y.normalized() * 0.06)
+		52:
+			var ph := float(snow.mpose_k)
+			var full := TAU * 2.0 + 1.45
+			var th := full
+			if ph < 1.1:
+				var u := ph / 1.1
+				th = full * (1.0 - (1.0 - u) * (1.0 - u))
+			elif ph > 1.45:
+				th = TAU * 2.0 + 1.45 * (1.0 - smoothstep(1.45, 1.9, ph))
+			var lie := smoothstep(0.85, 1.1, ph) * (1.0 - smoothstep(1.45, 1.9, ph))
+			var roll_k := 1.0 - smoothstep(1.45, 1.9, ph)
+			var r := dirv.cross(Vector3.UP).normalized()
+			var rb := Basis(r, -th)
+			var c := Vector3(0.0, 0.85, 0.0)
+			var off := Vector3(0.0, -0.22 * (1.0 - lie) * roll_k - 0.6 * lie, 0.0)
+			visual.transform = Transform3D(rb * Basis(Vector3.UP, target_yaw), c - rb * c + off)
+
+
 func _update_visual(delta: float, direction: Vector3, target_speed: float, just_landed: bool) -> void:
 	_ice_warn_t = maxf(_ice_warn_t - delta, 0.0)
+	_sit_k = move_toward(_sit_k, 1.0 if sitting else 0.0, delta / SIT_TIME)
+	if sitting and _sit_k >= 1.0 and not _plopped:
+		_plopped = true
+		suit.sit_plop()
+	if not belly and _belly_k <= 0.01 and not is_local:
+		_belly_lead = null
+	elif not is_local and belly:
+		var hv3 := Vector3(velocity.x, 0.0, velocity.z)
+		_belly_lead = _find_belly_lead(hv3.normalized() if hv3.length() > 0.3 else -visual.global_basis.z)
+	_death_t = _death_t + delta if is_dead else 0.0
 	_update_ripped()
 	_act_visuals(delta)
 	var on_floor := is_grounded()
@@ -2705,7 +3008,55 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 		var z_axis := Vector3.DOWN
 		var x_axis := y_axis.cross(z_axis)
 		var center := h.global_position + Vector3.UP * (2.12 + sin(_time * 9.0) * 0.025)
-		visual.global_transform = Transform3D(Basis(x_axis, y_axis, z_axis), center - y_axis * 0.95)
+		var t_up := Transform3D(Basis(x_axis, y_axis, z_axis), center - y_axis * 0.95)
+		# шаг 124: меня раскручивают как молот — держат за щиколотки, лечу по кругу головой наружу, лицом вверх
+		var hk: float = float(h.act_k) if int(h.act_mode) == 3 else 0.0
+		_spun_k = move_toward(_spun_k, 1.0 if int(h.act_mode) == 3 else 0.0, delta * 5.0)
+		if _spun_k > 0.001:
+			var fw: Vector3 = -hb.z
+			var yv := (fw + Vector3.UP * (0.02 + 0.3 * hk)).normalized()
+			var zv := (Vector3.DOWN - yv * Vector3.DOWN.dot(yv)).normalized()
+			var t_sp := Transform3D(Basis(yv.cross(zv), yv, zv), h.global_position + Vector3.UP * (1.12 + 0.15 * hk) + fw * 0.6)
+			var sk := smoothstep(0.0, 1.0, _spun_k)
+			t_up = Transform3D(Basis(t_up.basis.get_rotation_quaternion().slerp(t_sp.basis.get_rotation_quaternion(), sk)), t_up.origin.lerp(t_sp.origin, sk))
+		visual.global_transform = t_up
+	elif snow.pose_visual(delta):
+		pass
+	elif int(snow.mpose) >= 50 and int(snow.mpose) <= 52 and not is_dead:
+		_hill_visual(delta)
+	elif is_dead and not is_frozen and not in_water:
+		# смерть: трясёт, на колени, потом лицом в снег — с отскоком
+		var dt := _death_t
+		var pitch := 0.0
+		if dt > SUIT.D_FALL:
+			var u := clampf((dt - SUIT.D_FALL) / (SUIT.D_HIT - SUIT.D_FALL), 0.0, 1.0)
+			pitch = 1.42 * u * u
+			if dt > SUIT.D_HIT:
+				var b := clampf((dt - SUIT.D_HIT) / 0.4, 0.0, 1.0)
+				pitch = 1.42 - 0.13 * sin(b * PI) * (1.0 - b * 0.3)
+		var yaw := visual.rotation.y
+		var w := clampf(pitch / 1.42, 0.0, 1.0)
+		visual.rotation = Vector3(-pitch, yaw, 0.0)
+		visual.position = Vector3(0.0, 0.2 * w, 0.0)
+	elif force_belly > 0.01 and not belly:
+		# шаг 87: гора положила на живот (тащит верёвкой / держу сорвавшегося): нос — куда смотрю
+		var kk3 := smoothstep(0.0, 1.0, force_belly)
+		var yaw3 := visual.rotation.y
+		var wob3 := sin(_time * 13.0) * 0.07 * clampf(force_belly_spd / 2.5, 0.0, 1.0) * kk3
+		visual.rotation = Vector3(-1.38 * kk3 - 0.95 * force_dive, yaw3, wob3)
+		visual.position = Basis(Vector3.UP, yaw3) * Vector3(0.0, 0.24 * kk3 - 0.5 * force_dive, 0.85 * kk3 - 0.3 * force_dive)
+	elif belly or _belly_k > 0.01:
+		# на пузе: лицом вниз, нос — по ходу, чуть покачивает; встаю — отжимаюсь
+		_belly_k = move_toward(_belly_k, 1.0 if belly else 0.0, delta * (4.5 if belly else 2.4))
+		var hv2 := Vector3(velocity.x, 0.0, velocity.z)
+		var yaw2 := visual.rotation.y
+		if belly and hv2.length() > 0.4:
+			yaw2 = lerp_angle(yaw2, atan2(-hv2.x, -hv2.z), clampf(delta * 8.0, 0.0, 1.0))
+		var kk := smoothstep(0.0, 1.0, _belly_k)
+		var wob := sin(_time * 9.0) * 0.05 * clampf(hv2.length() / 6.0, 0.0, 1.0) * kk
+		visual.rotation = Vector3(-1.38 * kk, yaw2, wob)
+		# поворот — вокруг ступней, поэтому сдвигаю тело назад: середина корпуса над капсулой
+		visual.position = Basis(Vector3.UP, yaw2) * Vector3(0.0, 0.24 * kk, 0.85 * kk)
 	elif _tumble:
 		# лечу в панике: корпус ровно, чуть откидывает назад к земле, покачивает
 		var back := clampf(0.12 - velocity.y * 0.06, 0.05, 0.6)
@@ -2742,6 +3093,9 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 			# волокут на верёвке — разворачивает лицом к тянущему
 			var td := _towed_dir()
 			visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-td.x, -td.z), 8.0 * delta)
+		elif fp_view and controlled and not sitting and act_mode == 0 and snow._dig_target == null:
+			# от первого лица корпус всегда смотрит туда же, куда камера (ноги шагают в сторону движения)
+			visual.rotation.y = lerp_angle(visual.rotation.y, camera_pivot.global_rotation.y, clampf(22.0 * delta, 0.0, 1.0))
 		elif has_input:
 			var target_yaw := atan2(-direction.x, -direction.z)
 			visual.rotation.y = lerp_angle(visual.rotation.y, target_yaw, turn_speed * delta)
@@ -2757,7 +3111,16 @@ func _update_visual(delta: float, direction: Vector3, target_speed: float, just_
 	sprint_trail.emitting = running
 	steam.emitting = exhausted or is_dead or (_heat > 1.0 and frost > 0.5)
 
-	suit.animate(delta, _suit_state(direction, target_speed, just_landed, has_input, running))
+	# чужой дрон далеко от камеры — анимирую через кадр (вдали разницы не видно)
+	_anim_skip_dt += delta
+	var far_anim := false
+	if not controlled:
+		var cam := get_viewport().get_camera_3d()
+		far_anim = cam != null and cam.global_position.distance_squared_to(global_position) > 28.0 * 28.0
+	_anim_frame += 1
+	if not far_anim or _anim_frame % 2 == 0 or just_landed:
+		suit.animate(_anim_skip_dt, _suit_state(direction, target_speed, just_landed, has_input, running))
+		_anim_skip_dt = 0.0
 	visual.visible = not (_invuln_timer > 0.0 and fmod(_time, 0.2) < 0.07)
 
 
@@ -2791,9 +3154,15 @@ func _suit_state(direction: Vector3, target_speed: float, just_landed: bool, has
 	_update_vis_parcel(get_physics_process_delta_time())
 	var on_floor := is_grounded()
 	var h_speed := Vector3(velocity.x, 0.0, velocity.z).length()
-	var skating := is_local and on_floor and _floor_collider is Object and is_instance_valid(_floor_collider) \
+	var rink := is_local and on_floor and _floor_collider is Object and is_instance_valid(_floor_collider) \
 		and (_floor_collider as Object).has_meta("skate")
-	var icy := on_floor and surface_grip < 0.5 and not skating
+	var icy := on_floor and surface_grip < 0.5 and not rink
+	# на любом скользком льду едем «коньковым» шагом (как на катке), если ноги целы и не вмёрзли
+	var can_skate := legs_count() >= 2 and not belly and not sitting \
+		and held_friend == null and rolling_block == null and _repair_target == null and _rip_target == null
+	var skating := rink or (icy and can_skate and (h_speed > 0.9 or (has_input and is_local)))
+	if skating:
+		icy = false
 	var look_yaw := 0.0
 	var look_pitch := 0.0
 	if is_local:
@@ -2833,6 +3202,15 @@ func _suit_state(direction: Vector3, target_speed: float, just_landed: bool, has
 		"just_landed": just_landed,
 		"land_speed": -_prev_velocity.y if is_local else -_net_prev_vy,
 		"thrust": _thruster_power,
+		"sit": 1.0 if (snow.buried or snow.swept or snow.capsule >= 0) else smoothstep(0.0, 1.0, _sit_k),
+		"sitting": sitting or snow.buried or snow.swept or snow.capsule >= 0,
+		"ride": snow.swept,
+		"sit_fire": _heat > 1.0,
+		"belly": maxf(_belly_k, force_belly),
+		"belly_spd": force_belly_spd if force_belly > 0.5 else (Vector3(velocity.x, 0.0, velocity.z).length() if belly else 0.0),
+		"belly_paddle": maxf(_paddle, force_paddle),
+		"belly_lead": _belly_lead if _belly_lead != null and is_instance_valid(_belly_lead) else null,
+		"belly_ice": surface_grip < 0.5,
 		"hp": clampf(health / max_health, 0.0, 1.0) if is_local else _net_hp,
 		"look_yaw": look_yaw,
 		"look_pitch": look_pitch,
@@ -2841,20 +3219,23 @@ func _suit_state(direction: Vector3, target_speed: float, just_landed: bool, has
 		"wet": _wet_timer > 0.0,
 		"rid": get_rid(),
 		"weight": _vis_parcel.carry_weight() if _vis_parcel is Parcel else 2,
-		"lift": held_friend if is_instance_valid(held_friend) else null,
+		"lift": held_friend if is_instance_valid(held_friend) else (snow if snow.holding_bot() else null),
 		"carried": carried_by != null,
+		"spin": act_k if act_mode == 3 else -1.0,
+		"spun": _spun_k if carried_by != null else 0.0,
 		"tumble": _tumble,
 		"rescue_role": rescue_role,
 		"rescue_t": rescue_t,
 		"clasp": rescue_clasp() if rescue_role != 0 else Vector3.ZERO,
 		"rope": rope.pose() if rope else {},
 		"throw_charge": maxf(_charge, 0.0),
-		"push_point": _push_point,
+		"push_point": _push_point if _push_point != Vector3.ZERO else external_push,
 		"balance": _ice_warn_t > 0.0,
 		"repair": _repair_pose(),
 		"rip": _rip_pose(),
 		"ripped": ripped_info,
 		"flop": (1.0 - _flop_t / FLOP_TIME) if _flop_t > 0.0 else -1.0,
+		"death_t": _death_t if is_dead else -1.0,
 		"carry_limb": held_limb if held_limb != null and is_instance_valid(held_limb) and act_mode != 1 else null,
 		"carry_limb_end": held_limb.get("_end") if held_limb != null and is_instance_valid(held_limb) else Vector3(0, -0.7, 0),
 		"carry_limb_kind": String(held_limb.kind) if held_limb != null and is_instance_valid(held_limb) else "",
@@ -2862,6 +3243,19 @@ func _suit_state(direction: Vector3, target_speed: float, just_landed: bool, has
 		"rope_grip": _rope_grip_dir(),
 		"wave": is_bot and has_node("Brain") and bool(get_node("Brain").get("calling_help")),
 		"self": self,
+		"fp": fp_view and controlled,
+		"dig": snow._dig_target != null,
+		"climb": int(snow.climb) if snow else 0,
+		"climb_moving": bool(snow._cl_moving or snow.mpose_moving) if snow else false,
+		"mpose": int(snow.mpose) if snow else 0,
+		"ice_axes": ice_axes,
+		"probe": glacier_probe,
+		"rope_hold": rope_hold,
+		"mpose_k": float(snow.mpose_k) if snow else 0.0,
+		"mpose_pt": snow.mpose_pt if snow else Vector3.ZERO,
+		"mpose_dir": snow.mpose_dir if snow else Vector3.FORWARD,
+		"fp_pitch": camera_pivot.rotation.x,
+		"fp_yaw": camera_pivot.global_rotation.y,
 	}
 
 
@@ -2956,6 +3350,7 @@ func _update_frost_visual(delta: float) -> void:
 func _update_hud() -> void:
 	if not controlled:
 		return
+	_update_death_screen()
 	_update_meter()
 	_update_visor()
 	var mode := _carry_mode()
@@ -3056,7 +3451,7 @@ func _update_hud() -> void:
 		parcel_label.visible = false
 		stability_row.visible = false
 	elif held_friend != null:
-		prompt_label.text = "Друг над головой!  Q (держать) — замах, отпусти — бросок     E — поставить"
+		prompt_label.text = "Друг над головой!  Q (держать) — раскрутить как молот, отпусти — улетит туда, куда смотришь     E — поставить"
 		parcel_label.visible = false
 		stability_row.visible = false
 	elif rescue_role != 0:
@@ -3083,7 +3478,7 @@ func _update_hud() -> void:
 			if rc != null:
 				prompt_label.text = "Держи E — прикрутить %s другу%s" % [limb_name(held_limb.kind, true), whose]
 			else:
-				prompt_label.text = "В руке %s%s.  Q (держать) — кинуть     E — положить" % [limb_name(held_limb.kind), whose]
+				prompt_label.text = "В руке %s%s.  ЛКМ — махнуть как дубинкой     Q (держать) — кинуть     E — положить" % [limb_name(held_limb.kind), whose]
 		elif lp_near != null:
 			var ow = Network.find_player(int(lp_near.owner_id))
 			prompt_label.text = "E — поднять оторванную %s%s" % [limb_name(lp_near.kind, true), (" (" + ow.player_name + ")") if ow != null and ow != self else " (твою)"]
@@ -3109,14 +3504,19 @@ func _update_hud() -> void:
 				prompt_label.text = "Мокрый корпус замерзает на морозе!"
 			elif frost > 2.0:
 				prompt_label.text = "R — стряхнуть лёд" + ("  (у жаровни тает быстро)" if _heat <= 1.0 else "  — жаровня греет")
-		elif arms_count() < 2:
-			prompt_label.text = "Одной рукой груз не поднять — пусть друг прикрутит руку"
+		elif arms_count() == 0:
+			prompt_label.text = "Без рук ничего не взять — пусть друг прикрутит руку"
+		elif arms_count() < 2 and not _one_hand_ok(p):
+			prompt_label.text = "Одной рукой — только самые лёгкие посылки. Эта тяжёлая"
 		elif p.required_carriers > 1:
 			prompt_label.text = "E — взяться за тяжёлый груз (нужно двое)"
 		else:
 			prompt_label.text = "E — взять груз"
 		parcel_label.visible = false
 		stability_row.visible = false
+	var snow_hint: String = snow.hud_text() if held_parcel == null else ""
+	if snow_hint != "":
+		prompt_label.text = snow_hint
 
 	var exhausted := _exhausted_timer > 0.0
 	stamina_row.visible = exhausted or is_sprinting or stamina < stamina_max - 0.5
@@ -3133,6 +3533,20 @@ func _update_hud() -> void:
 	health_bar.modulate = Color(1, 0.3, 0.25).lerp(Color(0.45, 1, 0.5), hp)
 	damage_flash.color.a = move_toward(damage_flash.color.a, 0.0, get_physics_process_delta_time() * 0.8)
 	death_label.visible = is_dead
+
+
+## Сломан: экран выцветает в серое с помехами, надпись проявляется, мерцая
+func _update_death_screen() -> void:
+	if _death_fx == null:
+		return
+	var k := clampf(_death_t / 2.6, 0.0, 1.0) if is_dead else 0.0
+	_death_fx.visible = k > 0.001
+	if _death_fx.visible:
+		_death_mat.set_shader_parameter("amount", k)
+	var la := smoothstep(SUIT.D_HIT - 0.2, SUIT.D_HIT + 0.6, _death_t) if is_dead else 0.0
+	if la > 0.0 and la < 1.0 and randf() < 0.3:
+		la *= 0.35
+	death_label.modulate.a = la
 
 
 ## Стекло визора: иней с краёв (обледенение), капли после воды, всплеск при падении
@@ -3222,6 +3636,100 @@ func _try_lift_friend() -> bool:
 	return true
 
 
+## Шаг 85: руки заняты (посылка, деталь/рука, ледорубы, друг), а рядом другой предмет — бросаю своё и беру его
+func _try_swap() -> bool:
+	if is_bot or is_dead or arms_count() == 0:
+		return false
+	var busy := held_parcel != null or held_limb != null or held_friend != null or ice_axes
+	if not busy:
+		return false
+	var me_p := global_position
+	var kind := ""
+	var obj: Object = null
+	var bd := INF
+	var p := _find_nearest_parcel()
+	if p != null and p != held_parcel and (arms_count() >= 2 or _one_hand_ok(p)):
+		bd = me_p.distance_to(p.global_position)
+		kind = "parcel"
+		obj = p
+	var l := _limb_near(1.7)
+	if l != null and l != held_limb and me_p.distance_to(l.global_position) < bd:
+		bd = me_p.distance_to(l.global_position)
+		kind = "limb"
+		obj = l
+	var sp = get_tree().get_first_node_in_group("mountain")
+	sp = sp.get("spires") if sp != null else null
+	if sp != null and not ice_axes:
+		var da: float = sp.axes_spot(self)
+		if da < bd:
+			bd = da
+			kind = "axes"
+			obj = null
+	if arms_count() >= 2 and legs_count() >= 2 and is_on_floor():
+		var f := _friend_in_front(1.9)
+		if f != null and f != held_friend and me_p.distance_to(f.global_position) < bd:
+			kind = "friend"
+			obj = f
+	if kind == "":
+		return false
+	# бросаю своё
+	if held_parcel:
+		_put_down()
+	if held_limb:
+		_drop_limb(Vector3(velocity.x, 0.5, velocity.z))
+	if held_friend:
+		_put_friend_down()
+	if ice_axes and sp != null:
+		sp.drop_axes(self)
+	_swap_kind = kind
+	_swap_obj = obj
+	_swap_t = 1.5
+	return true
+
+
+## Шаг 142: положить ледорубы перед собой (лежат парой — поднять E)
+func _drop_axes() -> bool:
+	var mt = get_tree().get_first_node_in_group("mountain")
+	var sp = mt.get("spires") if mt != null else null
+	if sp == null or snow.busy():
+		return false
+	sp.drop_axes(self)
+	suit.reach()
+	return true
+
+
+## Шаг 85: как только руки свободны — беру то, ради чего бросил своё
+func _swap_tick(delta: float) -> void:
+	if _swap_t <= 0.0:
+		return
+	_swap_t -= delta
+	if held_parcel != null or held_limb != null or held_friend != null or ice_axes or is_dead:
+		return
+	var kind := _swap_kind
+	var obj := _swap_obj
+	_swap_t = 0.0
+	_swap_kind = ""
+	_swap_obj = null
+	match kind:
+		"parcel":
+			if is_instance_valid(obj) and (obj as Parcel).can_be_grabbed_by(peer_id):
+				_pickup_cooldown = 0.0
+				_releasing = false
+				grab_parcel(obj as Parcel)
+		"limb":
+			if is_instance_valid(obj):
+				suit.reach()
+				_limb_manager().pick(obj as Node3D, peer_id)
+		"axes":
+			var mt = get_tree().get_first_node_in_group("mountain")
+			var sp = mt.get("spires") if mt != null else null
+			if sp != null:
+				sp.take_axes(self)
+		"friend":
+			if is_instance_valid(obj) and is_on_floor():
+				_lift_call(obj as Node3D, true, Vector3.ZERO)
+
+
 func _put_friend_down() -> void:
 	if held_friend:
 		suit.reach()
@@ -3235,6 +3743,11 @@ func _throw_friend(power := 1.0) -> void:
 	visual.rotation.y = atan2(-aim.x, -aim.z)
 	var vel := _friend_throw_vel(power)
 	_noise_burst += 0.6
+	if _charge > 0.55 and not _ai_driven():
+		# раскрутил сильно — после броска самого ведёт (закружилась голова)
+		_stagger_timer = 0.25 + 0.4 * _charge
+		_stagger_total = _stagger_timer
+		_stagger_strength = 0.5
 	_lift_call(held_friend, false, vel)
 
 
@@ -3506,6 +4019,7 @@ func teleport_to(pos: Vector3) -> void:
 	if held_parcel:
 		_release_held(held_parcel.global_transform, Vector3.ZERO)
 	rescue_role = 0
+	snow.reset()
 	frost = 0.0
 	_wet_timer = 0.0
 	velocity = Vector3.ZERO
@@ -3553,6 +4067,171 @@ static func limb_name(kind: String, acc := false) -> String:
 	return "правую ногу" if acc else "правая нога"
 
 
+## Ctrl: на бегу — плюх на пузо и скольжу; стоя (короткое нажатие) — сесть / встать;
+## держать на ходу — тихий шаг (как раньше)
+func _sit_belly_input(delta: float) -> void:
+	_getup_t = maxf(_getup_t - delta, 0.0)
+	var on_floor := is_on_floor()
+	var hs := Vector3(velocity.x, 0.0, velocity.z).length()
+	var moving_input := _move_vec().length() > 0.1
+	if _just("quiet"):
+		_quiet_t = 0.0
+		_quiet_moved = false
+		if belly:
+			_belly_end()
+		elif (is_sprinting or hs > 5.0) and on_floor and _can_belly():
+			_belly_start()
+			_quiet_t = 99.0
+	if _held("quiet"):
+		_quiet_t += delta
+		if moving_input:
+			_quiet_moved = true
+	if _released("quiet") and _quiet_t < 0.3 and not _quiet_moved:
+		if sitting:
+			_stand_up()
+		elif on_floor and hs < 1.2 and _can_sit():
+			_sit_down()
+	if sitting:
+		_sit_t += delta
+		if (moving_input or _just("jump")) and _sit_t > 0.3:
+			_stand_up()
+		elif held_parcel != null or held_friend != null or carried_by != null or is_swimming or is_diving \
+				or is_frozen or not on_floor and _sit_t > 0.8:
+			_stand_up()
+	if belly:
+		_belly_t += delta
+		if _just("jump") and _belly_t > 0.3:
+			_belly_end()
+		elif is_swimming or is_diving or is_frozen or carried_by != null or held_friend != null:
+			_belly_end()
+
+
+func _can_sit() -> bool:
+	return held_parcel == null and held_friend == null and held_limb == null and rolling_block == null \
+		and carried_by == null and not is_frozen and not is_swimming and not is_diving and not downed \
+		and (rope == null or rope.state == ROPE.S.NONE) and _repair_target == null and _rip_target == null \
+		and legs_count() > 0
+
+
+func _can_belly() -> bool:
+	return held_friend == null and rolling_block == null and carried_by == null and not downed \
+		and (held_parcel == null or (_carry_mode() == 1 and held_parcel.carry_weight() <= 2)) \
+		and (rope == null or rope.state == ROPE.S.NONE) and arms_count() > 0 and not sitting
+
+
+func _sit_down() -> void:
+	sitting = true
+	_sit_t = 0.0
+	_plopped = false
+	suit.emote(SUIT.Mood.HAPPY, 1.2)
+
+
+func _stand_up() -> void:
+	if not sitting:
+		return
+	sitting = false
+	_sit_t = 0.0
+
+
+func _belly_start() -> void:
+	belly = true
+	_belly_t = 0.0
+	_belly_slow = 0.0
+	is_sprinting = false
+	var hv := Vector3(velocity.x, 0.0, velocity.z)
+	var fwd := hv.normalized() if hv.length() > 0.5 else -visual.global_basis.z
+	var spd := minf(hv.length() + 2.5, BELLY_MAX)
+	velocity = fwd * spd + Vector3.UP * 2.6
+	_was_on_floor = false
+	_coyote_timer = 0.0
+	_noise_burst += 0.8
+	body.scale = Vector3(0.85, 1.15, 0.85)
+	suit.emote(SUIT.Mood.HAPPY, 2.0)
+
+
+func _belly_end() -> void:
+	if not belly:
+		return
+	belly = false
+	_belly_lead = null
+	_getup_t = 0.45
+
+
+## Скольжу на пузе: трение мало (на льду — почти нет), с горки разгоняюсь,
+## A/D — подруливаю, W на малой скорости — гребу руками (тратит выносливость).
+## Сзади друга на пузе — хватаюсь за его ботинки, едем паровозиком.
+func _belly_move(delta: float, input_dir: Vector2, on_floor: bool) -> void:
+	var hv := Vector3(velocity.x, 0.0, velocity.z)
+	var spd := hv.length()
+	var fwd := hv / spd if spd > 0.05 else -visual.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	fwd = fwd.rotated(Vector3.UP, -input_dir.x * 1.4 * delta * clampf(spd / 3.0, 0.3, 1.0))
+	var fr := 2.0
+	if surface_grip < 0.5:
+		fr = 0.25
+	var skating := on_floor and _floor_collider is Object and is_instance_valid(_floor_collider) \
+		and (_floor_collider as Object).has_meta("skate")
+	if skating:
+		fr = 0.12
+	if not on_floor:
+		fr = 0.0
+	spd = maxf(spd - fr * delta, 0.0)
+	_paddle = move_toward(_paddle, 0.0, delta * 2.0)
+	if input_dir.y < -0.3 and spd < 5.5 and stamina > 1.0:
+		spd += 3.2 * delta
+		stamina = maxf(stamina - 9.0 * delta, 0.0)
+		_regen_timer = stamina_regen_delay
+		_paddle = 1.0
+	var v := fwd * spd
+	if on_floor:
+		# под горку — разгоняюсь, в горку — тормозит
+		var n := get_floor_normal()
+		v += Vector3(n.x, 0.0, n.z) * 9.8 * 0.85 * delta
+	v += _last_wind * 0.35 * delta
+	# паровозик: впереди друг на пузе — держусь за его ботинки
+	_belly_lead = _find_belly_lead(fwd)
+	if _belly_lead == null and is_bot:
+		# бот догоняет хозяина, чтобы ухватиться за ботинки
+		var far := _find_belly_lead(fwd, 9.0)
+		if far != null:
+			var to2: Vector3 = far.global_position - global_position
+			to2.y = 0.0
+			var fv: Vector3 = far.velocity
+			fv.y = 0.0
+			v = v.lerp(fv + to2.normalized() * 2.5, clampf(delta * 3.0, 0.0, 1.0))
+	if _belly_lead != null:
+		var lv: Vector3 = _belly_lead.velocity
+		lv.y = 0.0
+		var lf := lv.normalized() if lv.length() > 0.3 else -(_belly_lead.visual.global_basis.z as Vector3)
+		var spot: Vector3 = _belly_lead.global_position - lf * 1.35
+		var to := spot - global_position
+		to.y = 0.0
+		v = v.lerp(lv + to * 4.0, clampf(delta * 6.0, 0.0, 1.0))
+	if v.length() > BELLY_MAX:
+		v = v.normalized() * BELLY_MAX
+	velocity.x = v.x
+	velocity.z = v.z
+	# остановился — встаю
+	if v.length() < 0.6 and on_floor and _belly_t > 0.6:
+		_belly_slow += delta
+		if _belly_slow > 0.5 and _paddle <= 0.0:
+			_belly_end()
+	else:
+		_belly_slow = 0.0
+
+
+func _find_belly_lead(fwd: Vector3, reach := 2.4) -> Node3D:
+	for d in get_tree().get_nodes_in_group("player"):
+		if d == self or not bool(d.get("belly")):
+			continue
+		var rel: Vector3 = (d as Node3D).global_position - global_position
+		rel.y = 0.0
+		if rel.length() < reach and rel.normalized().dot(fwd) > (0.6 if reach < 3.0 else 0.3):
+			return d
+	return null
+
+
 ## Насколько быстро могу двигаться без рук/ног
 func _limb_speed_mult() -> float:
 	match legs_count():
@@ -3563,20 +4242,23 @@ func _limb_speed_mult() -> float:
 	return 0.3 if arms_count() > 0 else 0.08    # ползу на руках / извиваюсь
 
 
+const STRONG_HIT := 6.0           ## урон, с которого удар «сильный» (стена на бегу — от 6)
+const LIMB_LOSS_CHANCE := 0.9     ## сильный удар: что-то отлетает (1 из 10 — повезло, цел)
+
+
 ## Сильный удар может оторвать руку или ногу
 func _maybe_lose_limb(amount: float, kind: String, point: Vector3) -> void:
-	if kind in ["burn", "scald", "pressure", "thrown"] or limb_mask == 0 or is_frozen:
+	if kind in ["burn", "scald", "pressure"] or limb_mask == 0 or is_frozen:
 		return
-	# сильный удар — почти всегда что-то отлетает; корпус еле живой — хватает и среднего
+	if impact_soft and kind in ["hit", "fall", "thrown", ""]:
+		return                  # шаг 79: в пропасти — только царапины
+	# сильный удар (врезался на бегу, упал с высоты, шмякнулся после броска, ловушка) —
+	# что-то отлетает 9 раз из 10; шагом в стену урона нет вовсе
 	var chance := 0.0
-	if amount >= 10.0:
-		chance = 0.55
-	if amount >= 15.0:
-		chance = 0.75
-	if amount >= 25.0:
-		chance = 0.9
-	if health < max_health * 0.35 and amount >= 6.0:
-		chance = maxf(chance, 0.55)
+	if amount >= STRONG_HIT or (kind == "thrown" and amount >= 4.0):
+		chance = LIMB_LOSS_CHANCE
+	elif health < max_health * 0.35 and amount >= 4.0:
+		chance = 0.5            # корпус еле живой — хватает и среднего
 	if randf() >= chance:
 		return
 	var have: Array[String] = []
@@ -3706,9 +4388,9 @@ func _rpc_limbs(mask: int) -> void:
 
 ## Без рук многое нельзя: роняю то, что держал
 func _after_limb_change() -> void:
+	if held_parcel != null and (arms_count() == 0 or (arms_count() < 2 and not _one_hand_ok(held_parcel))):
+		_release_held(held_parcel.global_transform, Vector3(velocity.x, 1.0, velocity.z))
 	if arms_count() < 2:
-		if held_parcel != null:
-			_release_held(held_parcel.global_transform, Vector3(velocity.x, 1.0, velocity.z))
 		if held_friend != null:
 			_lift_call(held_friend, false, Vector3.ZERO)
 		if rope and rope.state != ROPE.S.NONE:
@@ -3917,6 +4599,11 @@ func _limb_actions(delta: float) -> void:
 		act_target = _rip_target
 		act_kind = _rip_kind
 		act_k = clampf(_rip_t / RIP_TIME, 0.0, 1.0)
+	elif held_friend != null and is_instance_valid(held_friend) and _charge >= 0.0:
+		act_mode = 3                 # шаг 124: раскручиваю друга («молот») — поза у всех копий
+		act_target = held_friend
+		act_kind = ""
+		act_k = _charge
 	else:
 		act_mode = 0
 		act_target = null
@@ -3951,7 +4638,8 @@ func _act_visuals(delta: float) -> void:
 	if act_mode == 2 and tgt != null:
 		var n := _rip_dir()
 		var gk := smoothstep(0.25, 1.0, act_k)
-		tgt.suit.set_strain(act_kind, -n * (gk * 0.11 + _rip_pulse() * 0.03 * gk), act_k)
+		# шаг 124: деталь выходит из гнезда заметнее (до ~20 см), на рывках — ещё дальше, провода в струну
+		tgt.suit.set_strain(act_kind, -n * (gk * 0.19 + _rip_pulse() * 0.07 * gk), act_k)
 		var want := 0
 		for th in RIP_BOLTS:
 			if act_k >= float(th):

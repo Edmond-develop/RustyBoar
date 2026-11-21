@@ -17,13 +17,13 @@ extends Node3D
 @export var environment_path: NodePath   ## WorldEnvironment
 @export var max_fog := 0.06              ## Плотность тумана в самой метели (в порыв)
 @export var calm_between_gusts := false  ## true — между порывами штиль, всё видно только в порыв
-@export var base_wind := 1.2             ## Постоянный ветер (м/с сноса) — если не штиль
+@export var base_wind := 1.6             ## Постоянный ветер (м/с сноса) — если не штиль
 @export var gust_wind := 6.5             ## Порыв (м/с сноса)
 @export var gust_interval_min := 4.5
 @export var gust_interval_max := 8.0
 @export var gust_warning := 1.0          ## Сколько длится «предупреждение» перед порывом
-@export var gust_duration := 1.8
-@export var gust_fade := 0.8             ## За сколько порыв стихает
+@export var gust_duration := 3.8
+@export var gust_fade := 2.2             ## За сколько порыв стихает (медленно, с затухающими толчками)
 @export var gust_kick := 0.0             ## Рывок в начале порыва (м/с)
 
 var intensity := 0.0                     ## 1 — дрон внутри зоны

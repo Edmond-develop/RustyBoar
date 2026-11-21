@@ -13,10 +13,12 @@ extends Node3D
 @export var spawn_point := Vector3(0, 1, 0)
 @export var snow_stop_from_z := 960.0   ## Южнее снегопад слабеет (база)…
 @export var snow_stop_to_z := 1020.0     ## …и здесь стихает совсем
-@export var objective := "Исследуй Борею — на севере за ледяным озером"
+@export var objective := "Донеси посылку с корабля на вершину Пика — на севере, за Лавинной долиной"
 @export var player_scene: PackedScene = preload("res://scenes/player/player.tscn")
 
 const TEST_TOOLS := preload("res://scenes/levels/test_tools.gd")
+const PERF_TUNER := preload("res://scripts/perf/perf_tuner.gd")
+const GRAPHICS := preload("res://scripts/perf/graphics.gd")
 
 @onready var objective_label: Label = get_node_or_null("LevelHUD/Top/Objective")
 @onready var info_label: Label = get_node_or_null("LevelHUD/Top/Info")
@@ -28,6 +30,13 @@ var elapsed := 0.0
 var deaths := 0
 
 var _sync_timer := 0.0
+const BANNER_FADE_IN := 0.25
+const BANNER_FADE_OUT := 0.5
+const BANNER_REPEAT := 8.0
+var _banner_t := -1.0            ## сколько уже висит надпись (−1 — нет надписи)
+var _banner_hold := 2.0
+var _banner_key := ""
+var _banner_at := -100.0
 var _snow: GPUParticles3D
 
 
@@ -55,6 +64,20 @@ func _ready() -> void:
 		_snow.emitting = true
 		add_child(_snow)
 
+	# оптимизация: дальнее — не рисуем, дальние ловушки засыпают (после того, как мир достроится)
+	get_tree().create_timer(1.2).timeout.connect(func():
+		if is_instance_valid(self):
+			var tuner := Node.new()
+			tuner.set_script(PERF_TUNER)
+			tuner.name = "PerfTuner"
+			tuner.set("level", self)
+			add_child(tuner)
+			# шаг 74: настройки графики (F2) и автонастройка по скорости кадров
+			var gfx := CanvasLayer.new()
+			gfx.set_script(GRAPHICS)
+			gfx.name = "Graphics"
+			add_child(gfx))
+
 	Network.report_level_ready()
 
 
@@ -81,6 +104,7 @@ func _spawn_players() -> void:
 
 func _process(delta: float) -> void:
 	elapsed += delta
+	_update_banner(delta)
 	if multiplayer.is_server():
 		_sync_timer -= delta
 		if _sync_timer <= 0.0 and Network.in_game and Network.is_online():
@@ -116,25 +140,53 @@ func _update_hud() -> void:
 	if player == null or objective_label == null:
 		return
 	objective_label.text = objective
-	var ship := Vector3(SnowTerrain.CRASH_NOSE.x, 0.0, SnowTerrain.CRASH_NOSE.y)
 	var p: Vector3 = player.global_position
-	var dist := Vector2(p.x - ship.x, p.z - ship.z).length()
 	if info_label:
-		info_label.text = "Время экспедиции %s     До корабля: %d м     Поломок: %d" % [_format_time(elapsed), roundi(dist), deaths]
+		# шаг 72–73: цель — вершина Пика (высота и сколько осталось)
+		var top := MountainLayout.summit()
+		var dist := Vector2(p.x - top.x, p.z - top.z).length()
+		if MountainLayout.on_mountain(p):
+			info_label.text = "Время экспедиции %s     Высота: %d из %d м     Поломок: %d" % [_format_time(elapsed), roundi(maxf(p.y - MountainLayout.BASE_Y, 0.0)), roundi(MountainLayout.PEAK), deaths]
+		else:
+			info_label.text = "Время экспедиции %s     До Пика: %d м     Поломок: %d" % [_format_time(elapsed), roundi(dist), deaths]
 
 
-## Крупная надпись по центру экрана (только у этого игрока).
+## Надпись по центру экрана (только у этого игрока): появляется, держится 2–3 с и гаснет.
+## Новая надпись сразу заменяет старую; та же самая подряд (в пределах BANNER_REPEAT с) не повторяется.
+## Время считает сам уровень в _process — надпись не «залипает», даже если их пришло много подряд.
 func show_banner(title: String, subtitle: String) -> void:
 	if banner_label == null:
 		return
+	var key := title + "|" + subtitle
+	var now := Time.get_ticks_msec() / 1000.0
+	if key == _banner_key and now - _banner_at < BANNER_REPEAT:
+		return
+	_banner_key = key
+	_banner_at = now
 	banner_label.text = title
 	banner_sub.text = subtitle
-	var tw := create_tween()
-	tw.tween_property(banner_label, "modulate:a", 1.0, 0.4)
-	tw.parallel().tween_property(banner_sub, "modulate:a", 1.0, 0.4)
-	tw.tween_interval(3.0)
-	tw.tween_property(banner_label, "modulate:a", 0.0, 0.8)
-	tw.parallel().tween_property(banner_sub, "modulate:a", 0.0, 0.8)
+	_banner_hold = clampf(1.6 + 0.025 * subtitle.length(), 2.0, 3.2)
+	_banner_t = 0.0
+
+
+func _update_banner(delta: float) -> void:
+	if banner_label == null:
+		return
+	if _banner_t < 0.0:
+		banner_label.modulate.a = 0.0
+		banner_sub.modulate.a = 0.0
+		return
+	_banner_t += delta
+	var a := 1.0
+	if _banner_t < BANNER_FADE_IN:
+		a = _banner_t / BANNER_FADE_IN
+	elif _banner_t > _banner_hold:
+		a = 1.0 - (_banner_t - _banner_hold) / BANNER_FADE_OUT
+	if a <= 0.0:
+		_banner_t = -1.0
+		a = 0.0
+	banner_label.modulate.a = a
+	banner_sub.modulate.a = a
 
 
 ## Надпись у всех игроков (вызывает хост).

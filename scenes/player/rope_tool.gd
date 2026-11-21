@@ -107,47 +107,7 @@ func setup(player: CharacterBody3D) -> void:
 	_floor.resize(N)
 	for i in N:
 		_floor[i] = -1000.0
-	# моток: несколько витков, перехваченных обвязкой, и свисающий хвостик
-	_coil = Node3D.new()
-	_coil.name = "RopeCoil"
-	for k in 4:
-		var loop := TorusMesh.new()
-		var rr := 0.155 + 0.012 * k
-		loop.inner_radius = rr - 0.034
-		loop.outer_radius = rr
-		loop.rings = 22
-		loop.ring_segments = 8
-		loop.material = _mat
-		var lm := MeshInstance3D.new()
-		lm.mesh = loop
-		lm.position = Vector3(0.0, (k - 1.5) * 0.026, 0.006 * (k % 2))
-		lm.rotation = Vector3(0.06 * (k % 2 * 2 - 1), 0.4 * k, 0.05 * (k - 1.5))
-		_coil.add_child(lm)
-	var wrap_mat := StandardMaterial3D.new()
-	wrap_mat.albedo_color = Color(0.12, 0.13, 0.16)
-	wrap_mat.roughness = 0.6
-	for side in [-1.0, 1.0]:
-		var wrap := MeshInstance3D.new()
-		var wm := CylinderMesh.new()
-		wm.top_radius = 0.036
-		wm.bottom_radius = 0.036
-		wm.height = 0.13
-		wm.radial_segments = 8
-		wm.material = wrap_mat
-		wrap.mesh = wm
-		wrap.position = Vector3(0.16 * side, 0.0, 0.0)
-		_coil.add_child(wrap)
-	var tail := MeshInstance3D.new()
-	var tm0 := CylinderMesh.new()
-	tm0.top_radius = 0.022
-	tm0.bottom_radius = 0.02
-	tm0.height = 0.2
-	tm0.radial_segments = 6
-	tm0.material = _mat
-	tail.mesh = tm0
-	tail.position = Vector3(0.05, -0.02, 0.2)
-	tail.rotation = Vector3(1.25, 0.0, 0.25)
-	_coil.add_child(tail)
+	_make_coil()
 	# крюк: стальной стержень с ушком под верёвку, загнутый зуб с остриём,
 	# пружинная защёлка и маячок на стержне. Ось +Y — к верёвке, зуб — внизу.
 	_clip = Node3D.new()
@@ -346,7 +306,8 @@ func local_update(delta: float) -> void:
 	var busy: bool = p.held_parcel != null or p.held_friend != null or p.carried_by != null \
 		or p.arms_count() < 2 or p.held_limb != null \
 		or p.is_dead or p.is_frozen or p.rescue_role != 0 or p.downed \
-		or p.visual.get_node_or_null("HockeyStick") != null
+		or p.visual.get_node_or_null("HockeyStick") != null or bool(p.get("ice_axes")) or bool(p.get("glacier_probe")) \
+		or int(p.get_meta("rw_tool", 0)) != 0
 	match state:
 		S.NONE:
 			if equipped and not busy and p._just("use_item"):
@@ -1165,8 +1126,59 @@ static func _basis_y(y: Vector3) -> Basis:
 	return Basis(x, y, x.cross(y))
 
 
+## Моток: несколько витков, перехваченных обвязкой, и свисающий хвостик
+func _make_coil() -> void:
+	_coil = Node3D.new()
+	_coil.name = "RopeCoil"
+	for k in 4:
+		var loop := TorusMesh.new()
+		var rr := 0.155 + 0.012 * k
+		loop.inner_radius = rr - 0.034
+		loop.outer_radius = rr
+		loop.rings = 22
+		loop.ring_segments = 8
+		loop.material = _mat
+		var lm := MeshInstance3D.new()
+		lm.mesh = loop
+		lm.position = Vector3(0.0, (k - 1.5) * 0.026, 0.006 * (k % 2))
+		lm.rotation = Vector3(0.06 * (k % 2 * 2 - 1), 0.4 * k, 0.05 * (k - 1.5))
+		_coil.add_child(lm)
+	var wrap_mat := StandardMaterial3D.new()
+	wrap_mat.albedo_color = Color(0.12, 0.13, 0.16)
+	wrap_mat.roughness = 0.6
+	for side in [-1.0, 1.0]:
+		var wrap := MeshInstance3D.new()
+		var wm := CylinderMesh.new()
+		wm.top_radius = 0.036
+		wm.bottom_radius = 0.036
+		wm.height = 0.13
+		wm.radial_segments = 8
+		wm.material = wrap_mat
+		wrap.mesh = wm
+		wrap.position = Vector3(0.16 * side, 0.0, 0.0)
+		_coil.add_child(wrap)
+	var tail := MeshInstance3D.new()
+	var tm0 := CylinderMesh.new()
+	tm0.top_radius = 0.022
+	tm0.bottom_radius = 0.02
+	tm0.height = 0.2
+	tm0.radial_segments = 6
+	tm0.material = _mat
+	tail.mesh = tm0
+	tail.position = Vector3(0.05, -0.02, 0.2)
+	tail.rotation = Vector3(1.25, 0.0, 0.25)
+	_coil.add_child(tail)
+
+
 ## Моток: в левой руке (надета, не брошена) или на поясе; худеет, когда верёвка снаружи
 func _update_coil() -> void:
+	# шаг 71: моток могли удалить (раньше — при выходе дрона из сцены) — тогда просто собираю новый
+	if not is_instance_valid(_coil):
+		_coil = null
+		_coil_parent = null
+		_make_coil()
+		if _coil == null:
+			return
 	var have: bool = p.has_item("rope")
 	var parent: Node3D = null
 	if have:
@@ -1264,6 +1276,8 @@ func _rpc_len(len: float, pull: bool) -> void:
 	pulling = pull
 
 
-func _exit_tree() -> void:
-	if is_instance_valid(_coil) and _coil.get_parent() == null:
-		_coil.queue_free()
+## Моток вне сцены (не в руке и не на поясе) удаляем вместе с верёвкой. Шаг 69: не при выходе из сцены —
+## готовый бот (test_tools._pool) выходит из неё и возвращается, моток ему ещё нужен
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(_coil) and _coil.get_parent() == null:
+		_coil.free()

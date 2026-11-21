@@ -24,6 +24,7 @@ var _terrain: Node
 var _spores: GPUParticles3D
 var _env: Environment
 var _fog_base := 0.0
+var _fog_k_last := 1.0
 var _fog_color_base := Color.WHITE
 
 ## Над лугом воздух прозрачнее и теплее, чем в снежной Борее
@@ -424,6 +425,8 @@ func _process(_delta: float) -> void:
 	_spores.global_position = p
 	var k := smoothstep(fade_from_z, full_from_z, p.z)
 	_spores.amount_ratio = k
-	if _env:
+	# туман трогаем только у луга (иначе перебивали бы метель в других местах)
+	if _env and (k > 0.0 or _fog_k_last > 0.0):
 		_env.fog_density = lerpf(_fog_base, MEADOW_FOG, k)
 		_env.fog_light_color = _fog_color_base.lerp(MEADOW_FOG_COLOR, k)
+	_fog_k_last = k

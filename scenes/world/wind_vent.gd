@@ -7,10 +7,10 @@ extends Node3D
 @export var length := 32.0          ## Как далеко бьёт ветер
 @export var depth := 7.0            ## Ширина полосы ветра (вдоль реки)
 @export var strength := 7.0         ## Скорость сноса, м/с
-@export var period := 6.0
+@export var period := 9.0
 @export_range(0.0, 1.0) var phase := 0.0
 @export var warning_time := 1.0
-@export var gust_time := 2.2
+@export var gust_time := 4.4
 
 var _local_t := 0.0
 var _stream: GPUParticles3D
@@ -62,5 +62,7 @@ func _physics_process(delta: float) -> void:
 	var along := rel.dot(blow_dir.normalized())
 	if along > -1.0 and along < length and absf(rel.z) < depth * 0.5 and rel.y < 6.0:
 		var fade := clampf(1.0 - along / length, 0.3, 1.0)
-		me.apply_wind(blow_dir.normalized() * strength * fade)
+		var u := (cycle - idle_time - warning_time) / gust_time
+		var env := smoothstep(0.0, 0.1, u) * (1.0 - 0.75 * smoothstep(0.6, 1.0, u))
+		me.apply_wind(blow_dir.normalized() * strength * fade * env)
 		me.add_shake(0.03)

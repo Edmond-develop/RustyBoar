@@ -21,6 +21,8 @@
 [ext_resource type="Script" path="res://scenes/world/alien_meadow.gd" id="41_meadow"]
 [ext_resource type="Script" path="res://scenes/world/checkpoint.gd" id="42_checkpoint"]
 
+[ext_resource type="Script" path="res://scenes/world/mountain.gd" id="72_peak"]
+
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.36, 0.53, 0.8, 1)
 sky_horizon_color = Color(0.84, 0.89, 0.96, 1)
@@ -123,6 +125,9 @@ size = Vector3(56, 0.4, 52)
 [sub_resource type="BoxShape3D" id="Shape_banner"]
 size = Vector3(500, 40, 3)
 
+[sub_resource type="BoxShape3D" id="Shape_banner_wide"]
+size = Vector3(840, 60, 3)
+
 [sub_resource type="BoxShape3D" id="Shape_shelter"]
 size = Vector3(3.2, 3.0, 5.0)
 
@@ -206,667 +211,8 @@ script = ExtResource("41_meadow")
 [node name="Avalanche" type="Node3D" parent="ZoneB_Avalanche"]
 script = ExtResource("10_avalanche")
 
-[node name="Shelter1" type="Node3D" parent="ZoneB_Avalanche"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 60)
-script = ExtResource("11_snap")
-
-[node name="RockWall" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter1" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 2.0, 0)
-use_collision = true
-size = Vector3(1.6, 4.4, 6)
-material = SubResource("Mat_rock")
-
-[node name="RockRoof" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter1" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 3.7, 0)
-use_collision = true
-size = Vector3(4.6, 0.7, 6.4)
-material = SubResource("Mat_rock")
-
-[node name="Safe" type="Area3D" parent="ZoneB_Avalanche/Shelter1" groups=["avalanche_shelter"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.5, 0)
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneB_Avalanche/Shelter1/Safe"]
-shape = SubResource("Shape_shelter")
-
-[node name="Sign" type="Label3D" parent="ZoneB_Avalanche/Shelter1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 4.8, 0)
-billboard = 1
-text = "УКРЫТИЕ"
-font_size = 40
-outline_size = 16
-modulate = Color(0.6, 1, 0.7, 1)
-
-[node name="Shelter2" type="Node3D" parent="ZoneB_Avalanche"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 44)
-script = ExtResource("11_snap")
-
-[node name="RockWall" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter2" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 2.0, 0)
-use_collision = true
-size = Vector3(1.6, 4.4, 6)
-material = SubResource("Mat_rock")
-
-[node name="RockRoof" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter2" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 3.7, 0)
-use_collision = true
-size = Vector3(4.6, 0.7, 6.4)
-material = SubResource("Mat_rock")
-
-[node name="Safe" type="Area3D" parent="ZoneB_Avalanche/Shelter2" groups=["avalanche_shelter"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.5, 0)
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneB_Avalanche/Shelter2/Safe"]
-shape = SubResource("Shape_shelter")
-
-[node name="Sign" type="Label3D" parent="ZoneB_Avalanche/Shelter2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 4.8, 0)
-billboard = 1
-text = "УКРЫТИЕ"
-font_size = 40
-outline_size = 16
-modulate = Color(0.6, 1, 0.7, 1)
-
-[node name="Shelter3" type="Node3D" parent="ZoneB_Avalanche"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 26)
-script = ExtResource("11_snap")
-
-[node name="RockWall" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter3" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3, 2.0, 0)
-use_collision = true
-size = Vector3(1.6, 4.4, 6)
-material = SubResource("Mat_rock")
-
-[node name="RockRoof" type="CSGBox3D" parent="ZoneB_Avalanche/Shelter3" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 3.7, 0)
-use_collision = true
-size = Vector3(4.6, 0.7, 6.4)
-material = SubResource("Mat_rock")
-
-[node name="Safe" type="Area3D" parent="ZoneB_Avalanche/Shelter3" groups=["avalanche_shelter"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, 1.5, 0)
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneB_Avalanche/Shelter3/Safe"]
-shape = SubResource("Shape_shelter")
-
-[node name="Sign" type="Label3D" parent="ZoneB_Avalanche/Shelter3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 4.8, 0)
-billboard = 1
-text = "УКРЫТИЕ"
-font_size = 40
-outline_size = 16
-modulate = Color(0.6, 1, 0.7, 1)
-
-[node name="ZoneC_Crevasses" type="Node3D" parent="."]
-
-[node name="ThinBridge1" type="StaticBody3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.0, -12)
-script = ExtResource("12_bridge")
-length = 9.0
-
-[node name="ThinBridge2" type="StaticBody3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.0, -12)
-script = ExtResource("12_bridge")
-length = 9.0
-
-[node name="ThinBridge3" type="StaticBody3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.0, -12)
-script = ExtResource("12_bridge")
-length = 9.0
-
-[node name="ThinBridge4" type="StaticBody3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.0, -30)
-script = ExtResource("12_bridge")
-length = 10.0
-
-[node name="ThinBridge5" type="StaticBody3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0.0, -30)
-script = ExtResource("12_bridge")
-length = 10.0
-
-[node name="RockBridge1" type="CSGBox3D" parent="ZoneC_Crevasses" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, -0.3, -12)
-use_collision = true
-size = Vector3(4.5, 1.0, 10)
-material = SubResource("Mat_rock")
-
-[node name="RockBridge2" type="CSGBox3D" parent="ZoneC_Crevasses" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, -0.3, -30)
-use_collision = true
-size = Vector3(4.5, 1.0, 11)
-material = SubResource("Mat_rock")
-
-[node name="Rail_12_L" type="CSGBox3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45.9, 0.55, -12)
-use_collision = true
-size = Vector3(0.25, 0.7, 10)
-material = SubResource("Mat_rock")
-
-[node name="Rail_12_R" type="CSGBox3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.1, 0.55, -12)
-use_collision = true
-size = Vector3(0.25, 0.7, 10)
-material = SubResource("Mat_rock")
-
-[node name="Rail_30_L" type="CSGBox3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45.9, 0.55, -30)
-use_collision = true
-size = Vector3(0.25, 0.7, 11)
-material = SubResource("Mat_rock")
-
-[node name="Rail_30_R" type="CSGBox3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50.1, 0.55, -30)
-use_collision = true
-size = Vector3(0.25, 0.7, 11)
-material = SubResource("Mat_rock")
-
-[node name="BridgeHint" type="Label3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, -4)
-billboard = 1
-text = "Тонкий лёд!   Надёжный мост — восточнее →"
-font_size = 44
-outline_size = 16
-modulate = Color(1, 0.85, 0.5, 1)
-
-[node name="RockBridgeSign" type="Label3D" parent="ZoneC_Crevasses"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, 3.5, -5)
-billboard = 1
-text = "НАДЁЖНЫЙ МОСТ"
-font_size = 48
-outline_size = 16
-
-[node name="ZoneD_Blizzard" type="Node3D" parent="."]
-
-[node name="Blizzard" type="Node3D" parent="ZoneD_Blizzard"]
-script = ExtResource("13_blizzard")
-environment_path = NodePath("../../WorldEnvironment")
-
-[node name="Beacon1" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -48)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon2" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -48)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon2"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon3" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -56)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon3"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon4" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -56)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon4"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon4"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon4"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon5" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -64)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon5"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon5"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon5"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon6" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -64)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon6"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon6"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon6"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon7" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -72)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon7"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon7"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon7"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon8" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -72)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon8"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon8"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon8"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon9" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -80)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon9"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon9"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon9"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon10" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -80)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon10"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon10"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon10"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon11" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -88)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon11"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon11"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon11"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon12" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -88)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon12"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon12"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon12"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon13" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 0, -96)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon13"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon13"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon13"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="Beacon14" type="Node3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0, -96)
-script = ExtResource("11_snap")
-
-[node name="Pole" type="CSGCylinder3D" parent="ZoneD_Blizzard/Beacon14"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.3, 0)
-radius = 0.07
-height = 2.6
-material = SubResource("Mat_metal")
-
-[node name="Lamp" type="CSGSphere3D" parent="ZoneD_Blizzard/Beacon14"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-radius = 0.18
-material = SubResource("Mat_red_light")
-
-[node name="Light" type="OmniLight3D" parent="ZoneD_Blizzard/Beacon14"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-light_color = Color(1, 0.3, 0.2, 1)
-light_energy = 1.6
-omni_range = 7.0
-
-[node name="BlizzardHint" type="Label3D" parent="ZoneD_Blizzard"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.0, -40)
-billboard = 1
-text = "Держись между огнями — по бокам обрыв"
-font_size = 44
-outline_size = 16
-modulate = Color(1, 0.85, 0.5, 1)
-
-[node name="ZoneE_Cave" type="Node3D" parent="."]
-
-[node name="Cave" type="CSGCombiner3D" parent="ZoneE_Cave" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -131)
-use_collision = true
-
-[node name="Block" type="CSGBox3D" parent="ZoneE_Cave/Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, 0)
-size = Vector3(30, 16, 30)
-material = SubResource("Mat_iceblock")
-
-[node name="Tunnel" type="CSGBox3D" parent="ZoneE_Cave/Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 0)
-size = Vector3(7, 6.5, 34)
-material = SubResource("Mat_tunnel")
-operation = 2
-
-[node name="CaveLight1" type="OmniLight3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 4.3, -119)
-light_color = Color(0.4, 0.85, 1, 1)
-light_energy = 1.8
-omni_range = 9.0
-
-[node name="Crystal1" type="CSGBox3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.35, 3.6, -119)
-size = Vector3(0.3, 0.9, 0.5)
-material = SubResource("Mat_crystal")
-
-[node name="CaveLight2" type="OmniLight3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 4.3, -126)
-light_color = Color(0.4, 0.85, 1, 1)
-light_energy = 1.8
-omni_range = 9.0
-
-[node name="Crystal2" type="CSGBox3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.35, 3.6, -126)
-size = Vector3(0.3, 0.9, 0.5)
-material = SubResource("Mat_crystal")
-
-[node name="CaveLight3" type="OmniLight3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 4.3, -133)
-light_color = Color(0.4, 0.85, 1, 1)
-light_energy = 1.8
-omni_range = 9.0
-
-[node name="Crystal3" type="CSGBox3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.35, 3.6, -133)
-size = Vector3(0.3, 0.9, 0.5)
-material = SubResource("Mat_crystal")
-
-[node name="CaveLight4" type="OmniLight3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 4.3, -140)
-light_color = Color(0.4, 0.85, 1, 1)
-light_energy = 1.8
-omni_range = 9.0
-
-[node name="Crystal4" type="CSGBox3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.35, 3.6, -140)
-size = Vector3(0.3, 0.9, 0.5)
-material = SubResource("Mat_crystal")
-
-[node name="Icicle1" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.691, 5.5, -118.5)
-script = ExtResource("14_icicle")
-length = 1.47
-
-[node name="Icicle2" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.306, 5.5, -120.955)
-script = ExtResource("14_icicle")
-length = 1.74
-
-[node name="Icicle3" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.565, 5.5, -122.934)
-script = ExtResource("14_icicle")
-length = 1.22
-
-[node name="Icicle4" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.129, 5.5, -124.93)
-script = ExtResource("14_icicle")
-length = 1.88
-
-[node name="Icicle5" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.445, 5.5, -126.789)
-script = ExtResource("14_icicle")
-length = 1.7
-
-[node name="Icicle6" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.021, 5.5, -128.744)
-script = ExtResource("14_icicle")
-length = 1.6
-
-[node name="Icicle7" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.812, 5.5, -130.739)
-script = ExtResource("14_icicle")
-length = 1.2
-
-[node name="Icicle8" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.404, 5.5, -133.14)
-script = ExtResource("14_icicle")
-length = 1.29
-
-[node name="Icicle9" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.685, 5.5, -135.28)
-script = ExtResource("14_icicle")
-length = 1.97
-
-[node name="Icicle10" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.339, 5.5, -137.495)
-script = ExtResource("14_icicle")
-length = 1.4
-
-[node name="Icicle11" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.226, 5.5, -139.973)
-script = ExtResource("14_icicle")
-length = 1.84
-
-[node name="Icicle12" type="Node3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.537, 5.5, -142.307)
-script = ExtResource("14_icicle")
-length = 1.68
-
-[node name="CaveHint" type="Label3D" parent="ZoneE_Cave"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7.5, -114)
-billboard = 1
-text = "ЛЕДЯНАЯ ПЕЩЕРА — не шуми"
-font_size = 52
-outline_size = 16
-
-[node name="ZoneF_Lake" type="Node3D" parent="."]
-
-[node name="FrozenLake" type="Node3D" parent="ZoneF_Lake"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -175)
-script = ExtResource("15_lake")
-
-[node name="LakeHint" type="Label3D" parent="ZoneF_Lake"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, -154)
-billboard = 1
-text = "Тонкий лёд в центре!   Толстый — у берега"
-font_size = 44
-outline_size = 16
-modulate = Color(1, 0.85, 0.5, 1)
-
-[node name="Station" type="Node3D" parent="."]
-
-[node name="MainHall" type="CSGBox3D" parent="Station" groups=["safe_ground"]]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, -207)
-use_collision = true
-size = Vector3(14, 5, 6)
-material = SubResource("Mat_white")
-
-[node name="HallStripe" type="CSGBox3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.2, -207)
-size = Vector3(14.1, 0.5, 6.1)
-material = SubResource("Mat_orange")
-
-[node name="Dome" type="CSGSphere3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, -204)
-use_collision = true
-radius = 3.6
-material = SubResource("Mat_white")
-
-[node name="Antenna" type="CSGCylinder3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 6, -204)
-use_collision = true
-radius = 0.15
-height = 12.0
-material = SubResource("Mat_metal")
-
-[node name="AntennaLamp" type="CSGSphere3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 12.2, -204)
-radius = 0.3
-material = SubResource("Mat_red_light")
-
-[node name="StationLight" type="OmniLight3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, -202)
-light_color = Color(1, 0.85, 0.6, 1)
-light_energy = 1.5
-omni_range = 12.0
-
-[node name="StationSign" type="Label3D" parent="Station"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6.3, -203.8)
-billboard = 1
-text = "СТАНЦИЯ «БОРЕЯ-7»"
-font_size = 80
-outline_size = 16
+[node name="ZoneG_Peak" type="Node3D" parent="."]
+script = ExtResource("72_peak")
 
 [node name="ZoneBanners" type="Node3D" parent="."]
 
@@ -898,57 +244,12 @@ subtitle = "Толстый скользкий лёд — скатись с бо�
 shape = SubResource("Shape_banner")
 
 [node name="Banner2" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 75)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -1731)
 script = ExtResource("16_banner")
-title = "Лавинный склон"
-subtitle = "Не шуми: бег и прыжки тревожат снег. Прячься под скалами"
+title = "Лавинная долина"
+subtitle = "Только шагом: рывок, прыжок или удар срывают снег. Капсулы у тропы (E) и ниши в скалах спасут — но лишь одного. С середины пути — беги!"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner2"]
-shape = SubResource("Shape_banner")
-
-[node name="Banner3" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 3)
-script = ExtResource("16_banner")
-title = "Трещины"
-subtitle = "Тонкий лёд трещит под весом. Надёжный мост — восточнее"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner3"]
-shape = SubResource("Shape_banner")
-
-[node name="Banner4" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -43)
-script = ExtResource("16_banner")
-title = "Плато бурь"
-subtitle = "Метель и порывы ветра. Держись огней"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner4"]
-shape = SubResource("Shape_banner")
-
-[node name="Banner5" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -110)
-script = ExtResource("16_banner")
-title = "Ледяная пещера"
-subtitle = "Сосульки падают от шагов и шума"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner5"]
-shape = SubResource("Shape_banner")
-
-[node name="Banner6" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -151)
-script = ExtResource("16_banner")
-title = "Замёрзшее озеро"
-subtitle = "Тонкий лёд в центре, толстый — у берега"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner6"]
-shape = SubResource("Shape_banner")
-
-[node name="Banner7" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -193)
-script = ExtResource("16_banner")
-title = "Станция «Борея-7»"
-subtitle = "Заброшенная станция на краю Бореи"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/Banner7"]
 shape = SubResource("Shape_banner")
 
 [node name="RiverBanner1" type="Area3D" parent="ZoneBanners"]
@@ -972,65 +273,38 @@ shape = SubResource("Shape_banner")
 [node name="FaultBanner" type="Area3D" parent="ZoneBanners"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 516)
 script = ExtResource("16_banner")
-title = "Разломы"
-subtitle = "Редкие полыньи и первый спуск — тормози заранее"
+title = "Ледяное поле"
+subtitle = "Простор на сотни метров — иди куда хочешь. Лёд трещит, полыньи прячутся под снегом"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/FaultBanner"]
+shape = SubResource("Shape_banner_wide")
+
+[node name="CanyonBanner" type="Area3D" parent="ZoneBanners"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 300)
+script = ExtResource("16_banner")
+title = "Ледяной каньон"
+subtitle = "Ущелья, обрывы, ловушки. У ложных дорог — свои развилки. Подъёмник сломан — ищите детали"
+
+[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/CanyonBanner"]
 shape = SubResource("Shape_banner")
 
 [node name="RiverBanner2" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 382)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -664)
 script = ExtResource("16_banner")
-title = "Вмёрзший корабль"
-subtitle = "Обломки, грузы и снежные вихри. У носа корабля — бортовой самописец (бонус)"
+title = "Снежная пустошь"
+subtitle = "Иди от вешки к вешке. Порыв — присядь (Ctrl), держись за вешку, укройся за скалой или держитесь вместе"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner2"]
-shape = SubResource("Shape_banner")
+shape = SubResource("Shape_banner_wide")
 
 [node name="RiverBanner3" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 338)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -960)
 script = ExtResource("16_banner")
-title = "Полыньи"
-subtitle = "Тонкий лёд трещит, перешейки, разводье с льдинами"
+title = "Белая мгла"
+subtitle = "Сошёл с тропы — под снегом могут быть трещины"
 
 [node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner3"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner4" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 281)
-script = ExtResource("16_banner")
-title = "Хрустальный лес"
-subtitle = "Кристаллы рушатся, если подойти. На чёрном льду трещина бежит за тобой — не останавливайся"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner4"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner5" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 236)
-script = ExtResource("16_banner")
-title = "Ледяные холмы"
-subtitle = "Глыбы сходят волнами. Услышал гул — уходи из-под холмов"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner5"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner6" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 192)
-script = ExtResource("16_banner")
-title = "Гейзеры, ветер и вихри"
-subtitle = "Пар над конусом — скоро удар. Вихри затягивают и раскручивают"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner6"]
-shape = SubResource("Shape_banner")
-
-[node name="RiverBanner7" type="Area3D" parent="ZoneBanners"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 136)
-script = ExtResource("16_banner")
-title = "Последний рубеж"
-subtitle = "Разгонись на трамплине или лови льдину"
-
-[node name="Shape" type="CollisionShape3D" parent="ZoneBanners/RiverBanner7"]
-shape = SubResource("Shape_banner")
+shape = SubResource("Shape_banner_wide")
 
 [node name="ZoneA_IceRiver" type="Node3D" parent="."]
 
@@ -1069,14 +343,15 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -400.0
-offset_top = 200.0
+offset_top = 232.0
 offset_right = 400.0
-offset_bottom = 262.0
+offset_bottom = 270.0
 grow_horizontal = 2
+mouse_filter = 2
 theme_override_colors/font_color = Color(1, 0.88, 0.55, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
-theme_override_constants/outline_size = 12
-theme_override_font_sizes/font_size = 46
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 28
 horizontal_alignment = 1
 
 [node name="BannerSub" type="Label" parent="LevelHUD"]
@@ -1084,13 +359,14 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -400.0
-offset_top = 262.0
+offset_top = 270.0
 offset_right = 400.0
-offset_bottom = 300.0
+offset_bottom = 294.0
 grow_horizontal = 2
+mouse_filter = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 20
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 16
 horizontal_alignment = 1
 
 [node name="Controls" type="Label" parent="LevelHUD"]
@@ -1102,9 +378,9 @@ offset_bottom = 160.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
 theme_override_constants/outline_size = 5
 theme_override_font_sizes/font_size = 13
-text = "WASD — движение     Мышь — камера
+text = "WASD — движение     Мышь — камера     L — вид от 1-го лица
 Пробел — прыжок     Shift (держать) — бег
-Ctrl — тихий ход (не будит лавины)
+Ctrl: стоя — сесть, на бегу — на пузо, держать — тихий ход
 E — взять / поднять друга / катить глыбу     Q (держать) — замах и бросок
 ЛКМ (держать) — раскрутить крюк     ПКМ — тянуть / смотать     R — разбить лёд другу
 F (держать) — оторвать другу руку/ногу     E с деталью рядом с другом (держать) — прикрутить"

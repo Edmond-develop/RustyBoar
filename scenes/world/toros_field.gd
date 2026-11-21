@@ -25,7 +25,6 @@ const HEATER := preload("res://scenes/world/heat_source.gd")
 const SNOW := preload("res://scenes/world/snow_patch.gd")
 const BLIZZARD := preload("res://scenes/world/blizzard.gd")
 const ICE_SHADER := preload("res://shaders/pressure_ice.gdshader")
-const MAP := preload("res://scenes/world/maze_map.gd")
 const CHECKPOINT := preload("res://scenes/world/checkpoint.gd")
 
 @export var half_width := 225.0
@@ -72,11 +71,7 @@ func _ready() -> void:
 	_entrance_checkpoint()
 	_b.finish(self)
 	_blizzard()
-	var map := CanvasLayer.new()
-	map.set_script(MAP)
-	map.set("maze", self)
-	map.name = "MazeMap"
-	add_child(map)
+	# карта лабиринта (Tab) убрана
 
 
 ## Плотный снег между стенами (держит хорошо). Пол собран из полос — в расщелинах его нет.

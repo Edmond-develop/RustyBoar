@@ -25,19 +25,41 @@ const LOCATIONS := [
 	["Ледяное озеро", 0.0, 905.0],
 	["Ледяной лабиринт — вход", 0.0, 768.0],
 	["Ледяной вал — луч маяка", 10.0, 550.0],
-	["Разломы", 0.0, 512.0],
-	["Вмёрзший корабль", 0.0, 382.0],
-	["Полыньи", 0.0, 346.0],
-	["Хрустальный лес", 0.0, 281.0],
-	["Ледяные холмы", 0.0, 236.0],
-	["Гейзеры, ветер и вихри", 0.0, 192.0],
-	["Последний рубеж", 0.0, 136.0],
-	["Лавинный склон", 0.0, 75.0],
-	["Трещины", 0.0, 3.0],
-	["Плато бурь", 0.0, -43.0],
-	["Ледяная пещера", 0.0, -110.0],
-	["Замёрзшее озеро", 0.0, -151.0],
-	["Станция «Борея-7»", 0.0, -193.0],
+	["Ледяное поле", 0.0, 512.0],
+	["Ледяное поле — завал и тонкий лёд", 0.0, 230.0],
+	["Пропасть — подъёмник (низ)", 0.0, 154.0],
+	["Снежная гора — вершина, сноуборды", 8.0, -30.0],
+	["Снежная гора — лес (1-й траверс)", 190.0, -222.0],
+	["Снежная гора — лес (2-й траверс)", 10.0, -294.0],
+	["Снежная гора — гребень", -176.0, -425.0],
+	["Снежная гора — комы", -71.0, -457.0],
+	["Снежная гора — трамплины", 150.0, -577.0],
+	["Снежная гора — финиш", 41.0, -624.0],
+	["Снежная пустошь — начало", 0.0, -662.0],
+	["Пустошь: первый поворот", 0.0, -895.0],
+	["Пустошь: брошенный лагерь", 66.0, -1218.0],
+	["Пустошь: метеобудка", -150.0, -1543.0],
+	["Передышка перед лавинами", 0.0, -1690.0],
+	["Лавинная долина — вход", 0.0, -1740.0],
+	["Лавинная долина — перевал", 9.0, -1955.0],
+	["Лавинная долина — середина", 0.0, -2050.0],
+	["Лавинная долина — разлом с мостом", 0.0, -2522.0],
+	["Лавинная долина — гребень", 0.0, -2556.0],
+	["Пик — базовый лагерь", -2.0, 0.0],
+	["Пик — уступ 1", -1.0, -0.12],
+	["Пик — пропасть с выступами (ледорубы)", -2.0, 4.0],
+	["Пик — приют «Первый»", -1.0, -0.3],
+	["Пик — ледник со скрытыми трещинами", -2.0, 5.0],
+	["Пик — пропасть, старый мост", -1.0, -0.585],
+	["Пик — приют «Второй», карнизы", -1.0, -0.66],
+	["Пик — уступ 3", -1.0, -0.76],
+	["Пик — плато, канатка", -2.0, 1.0],
+	["Пик — Плечо (приют, ночь)", -2.0, 2.0],
+	["Пик — ночная дорога (лёд)", -2.0, 6.0],
+	["Пик — подножие стены", -2.0, 7.0],
+	["Пик — стена, середина", -2.0, 8.0],
+	["Пик — вершина", -2.0, 3.0]
+
 ]
 const BOT_PANEL := preload("res://scenes/ui/bot_panel.gd")
 const COMMANDS := ["follow", "stay", "come", "goto", "carry", "water", "throw", "faint", "freeze"]
@@ -49,6 +71,88 @@ var panel: CanvasLayer
 var _home: Node3D = null         ## свой дрон (куда возвращаемся из бота)
 var _loc := 0
 var _help: Label
+## Шаг 69: боты собираются заранее (в начале уровня, по одному за кадр) и лежат вне сцены —
+## «+» только ставит готового бота на место, без подвисания. Отпустили — на его место собирается новый (через 1.5 с).
+var _pool := {}                  ## номер → готовый дрон (вне дерева сцены)
+var _pool_t := 3.0
+
+
+func _process(delta: float) -> void:
+	if _pool.size() >= MAX_COURIERS or not multiplayer.is_server() or Network.local_player == null:
+		return
+	_pool_t -= delta
+	if _pool_t > 0.0:
+		return
+	_pool_t = 0.25
+	var used := {}
+	for b in _couriers():
+		used[int(b.get_node("Brain").index)] = true
+	for idx in range(1, MAX_COURIERS + 1):
+		if not _pool.has(idx) and not used.has(idx):
+			_prebuild(idx)
+			return
+	_pool_t = 1.0
+
+
+func _new_bot(idx: int) -> CharacterBody3D:
+	var b: CharacterBody3D = PLAYER.instantiate()
+	b.name = "Courier%d" % idx
+	b.set_meta("bot_id", 1000 + idx)
+	b.set_meta("bot_name", "Бот %d" % idx)
+	b.set_meta("bot_color", idx % 4)
+	return b
+
+
+## Собрать бота заранее: на 2 кадра в сцену (выключенным, далеко внизу — там срабатывают _ready и отложенные
+## настройки), потом вынуть и держать наготове
+func _prebuild(idx: int) -> void:
+	var root := get_tree().current_scene
+	if root == null:
+		return
+	var b := _new_bot(idx)
+	b.process_mode = Node.PROCESS_MODE_DISABLED
+	b.position = Vector3(0.0, -3000.0, 0.0)
+	_pool[idx] = b
+	root.add_child(b)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(b) or b.get_parent() != root or _pool.get(idx) != b:
+		return
+	root.remove_child(b)
+	b.process_mode = Node.PROCESS_MODE_INHERIT
+
+
+## Шаг 69: отпущенный бот в «чистом» состоянии не удаляется, а возвращается в запас (новый собирать не надо —
+## нет подвисания). Если с ним что-то не так (сломан, вмёрз, без детали, держит/держат, в воде, в снегу,
+## на него накинута чужая верёвка) — удаляем, как раньше.
+func _recycle(b: Node) -> bool:
+	var idx := int(b.get_node("Brain").index) if b.has_node("Brain") else -1
+	if idx < 1 or _pool.has(idx) or b.is_dead or b.is_frozen or b.downed or int(b.limb_mask) != 15 \
+			or b.held_parcel != null or b.held_friend != null or b.carried_by != null or b.held_limb != null \
+			or b.is_swimming or b.is_diving or b.belly or b.sitting or b.snow.busy() or b.rope.state != 0:
+		return false
+	for d in get_tree().get_nodes_in_group("player"):
+		if d != b and d.get("rope") != null and d.rope.target == b:
+			return false
+	var brain := b.get_node("Brain")
+	b.remove_child(brain)
+	brain.free()
+	b.velocity = Vector3.ZERO
+	b.health = b.max_health
+	b.stamina = b.stamina_max
+	b.frost = 0.0
+	b.suit.clear_marks()
+	b.get_parent().remove_child(b)
+	_pool[idx] = b
+	return true
+
+
+func _exit_tree() -> void:
+	for k in _pool:
+		var b: Node = _pool[k]
+		if is_instance_valid(b) and not b.is_inside_tree():
+			b.queue_free()
+	_pool.clear()
 
 
 func _ready() -> void:
@@ -167,6 +271,40 @@ func _unhandled_input(event: InputEvent) -> void:
 func _teleport(me: Node3D, i: int) -> void:
 	var l: Array = LOCATIONS[i]
 	var pos := _ground(Vector3(l[1], 0.0, l[2]))
+	if float(l[1]) == -1.0:
+		# шаг 72: точка на тропе Пика (−u): чуть ниже по тропе, на полке
+		var u: float = -float(l[2])
+		var uu := maxf(u - 10.0 / MountainLayout.len_per_u(u), 0.0) if u < 1.0 else 1.0
+		pos = MountainLayout.point(uu) + Vector3.UP * 0.6
+		if u >= 1.0:
+			pos = MountainLayout.summit() + Vector3(0, 0.6, 3.0)
+	elif float(l[1]) == -2.0:
+		# шаг 73: особые точки Пика
+		match int(l[2]):
+			0:
+				pos = _ground(MountainLayout.point(0.0) + Vector3(-30.0, 0.0, 40.0)) + Vector3.UP * 0.6
+			1:
+				pos = MountainLayout.RW_A + Vector3(4.0, 0.6, 10.0)
+			2:
+				pos = Vector3(MountainLayout.BX - 7.0, MountainLayout.SH_Y + 0.6, MountainLayout.SH_ZS - 12.0)
+			4:
+				var su: float = MountainLayout.SP_U0 - 7.0 / MountainLayout.len_per_u(MountainLayout.SP_U0)
+				pos = MountainLayout.point(su) + Vector3.UP * 0.6
+			5:
+				var gu: float = MountainLayout.GL_U0 - 10.0 / MountainLayout.len_per_u(MountainLayout.GL_U0)
+				pos = MountainLayout.point(gu) + Vector3.UP * 0.6
+			6:
+				var L6: float = MountainLayout.road_len()
+				pos = MountainLayout.road_at(float(MountainLayout.ROAD_ICE[0][0]) * L6 - 6.0) + Vector3.UP * 0.8
+			7:
+				pos = Vector3(MountainLayout.FOOT_X, MountainLayout.FOOT_Y + 0.6, MountainLayout.FOOT_ZN + 4.0)
+			8:
+				var fz: float = MountainLayout.face_z(MountainLayout.pitch_top(2))
+				pos = Vector3(MountainLayout.BX, MountainLayout.pitch_top(2) + 0.6, fz - MountainLayout.LEDGE_D * 0.5)
+			_:
+				pos = MountainLayout.summit() + Vector3(0, 0.8, 3.0)
+	if float(l[1]) < 0.0:
+		pos = _drop(pos)                 # шаг 122: на Пике — точно на землю (не под текстуру)
 	me.teleport_to(pos)
 	for b in _couriers():
 		if b == me:
@@ -182,6 +320,21 @@ func _teleport(me: Node3D, i: int) -> void:
 
 
 ## Точка на земле (луч сверху), не в полынье
+## Шаг 122: луч вниз от точки (±40 м) — встать на то, что под ногами
+func _drop(p: Vector3) -> Vector3:
+	var space := get_viewport().get_world_3d().direct_space_state
+	var ex: Array[RID] = []
+	for d in get_tree().get_nodes_in_group("player"):
+		if d is CollisionObject3D:
+			ex.append((d as CollisionObject3D).get_rid())
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 6.0, p + Vector3.DOWN * 40.0)
+	q.exclude = ex
+	var hit := space.intersect_ray(q)
+	if hit.is_empty():
+		return p + Vector3.UP * 1.0
+	return (hit["position"] as Vector3) + Vector3.UP * 0.6
+
+
 func _ground(p: Vector3) -> Vector3:
 	var lake := get_tree().get_first_node_in_group("ice_lake")
 	if lake:
@@ -231,8 +384,10 @@ func _remove_courier() -> void:
 
 
 func add_courier() -> void:
+	if _home != null and (not is_instance_valid(_home) or not _home.is_inside_tree()):
+		_home = null                 # свой дрон пересоздан (новая игра, загрузка) — старая ссылка не годится
 	var me: Node3D = _home if _home else Network.local_player
-	if me == null:
+	if me == null or not is_instance_valid(me) or not me.is_inside_tree():
 		return
 	if not multiplayer.is_server():
 		level.show_banner("Боты-курьеры", "Звать ботов может только хост")
@@ -247,15 +402,24 @@ func add_courier() -> void:
 	var idx := 1
 	while used.has(idx):
 		idx += 1
-	var ctl: Node3D = Network.local_player
-	var b: CharacterBody3D = PLAYER.instantiate()
-	b.name = "Courier%d" % idx
-	b.set_meta("bot_id", 1000 + idx)
-	b.set_meta("bot_name", "Бот %d" % idx)
-	b.set_meta("bot_color", idx % 4)
+	var ctl: Node3D = Network.local_player if is_instance_valid(Network.local_player) else me
+	var b: CharacterBody3D = null
+	var pooled: Variant = _pool.get(idx)
+	if pooled != null and is_instance_valid(pooled):
+		b = pooled as CharacterBody3D
+		if b.is_inside_tree():
+			# шаг 71: ещё собирается (2 кадра в сцене) — забираю как есть, иначе он оставался лишним дроном внизу
+			b.get_parent().remove_child(b)
+			b.process_mode = Node.PROCESS_MODE_INHERIT
+	_pool.erase(idx)
+	if b == null:
+		b = _new_bot(idx)
 	var right: Vector3 = ctl.get("visual").global_basis.x
 	b.position = _ground(ctl.global_position + right * (1.8 + idx * 1.2))
+	b.velocity = Vector3.ZERO
 	me.get_parent().add_child(b)
+	b.set("_spawn_position", b.global_position)
+	b.set("_net_pos", b.global_position)
 	var brain := Node.new()
 	brain.set_script(BRAIN)
 	brain.name = "Brain"
@@ -284,7 +448,9 @@ func remove_courier() -> void:
 			d.set("held_friend", null)
 		if d.get("carried_by") == last:
 			d.set("carried_by", null)
-	last.queue_free()
+	if not _recycle(last):
+		last.queue_free()
+		_pool_t = maxf(_pool_t, 1.5)
 	await get_tree().process_frame
 	var rest := _couriers()
 	if not rest.is_empty():
@@ -367,7 +533,7 @@ func _switch_to(target: Node3D) -> void:
 func _update_help() -> void:
 	if _help == null:
 		return
-	var t := "«=» — следующая локация (Shift — назад)   I — инвентарь"
+	var t := "«=» — следующая локация (Shift — назад)   I — инвентарь   F2 — графика"
 	if multiplayer.is_server():
 		t += "\nB — панель ботов   «+»/«−» — позвать/отпустить   G — переселиться в бота"
 		if not _couriers().is_empty():

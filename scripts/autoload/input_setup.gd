@@ -19,6 +19,7 @@ func _ready() -> void:
 	_bind_keys("throw", [KEY_Q])
 	_bind_keys("shake_ice", [KEY_R])
 	_bind_keys("rip", [KEY_F])             # держать рядом с другом — оторвать ему руку/ногу
+	_bind_keys("view_toggle", [KEY_L])     # вид от первого / третьего лица
 	# ВРЕМЕННО, для проверки: боты-курьеры в скафандрах
 	_bind_keys("bot_add", [KEY_KP_ADD])
 	_bind_keys("bot_remove", [KEY_MINUS, KEY_KP_SUBTRACT])

@@ -29,8 +29,11 @@ const LINES := {
 	"faint": ["Всё… сил нет…", "Я полежу…", "Батарейка на нуле…"],
 	"freeze": ["Брррр…", "Хо-хо-холодно…", "Застыва-а-аю…"],
 	"gate": ["Встаю в луч!", "Отражу куда надо!", "Горячо, но держусь!"],
+	"winch": ["Кручу! Беги по мосту!", "Держу мост — давай!", "Ух, тяжёлый… беги!"],
 	"wait": ["Жду спасения!", "Я тут побарахтаюсь…"],
 	"repair": ["Держись, прикручу!", "Сейчас как новенький будешь!", "Где тут резьба…", "Крути-верти!"],
+	"buried": ["Меня завалило! Откопайте!", "Темно и холодно…", "Я тут, под снегом!"],
+	"dig": ["Копаю! Держись!", "Сейчас откопаю!", "Где-то тут был…"],
 	"iced": ["Разбей лёд! Жми R рядом!", "Я в глыбе… выручай!", "Брр… постучи по мне!", "Катни меня к жаровне!"],
 }
 
@@ -128,7 +131,20 @@ func _physics_process(delta: float) -> void:
 	var o := _owner()
 	if o == bot:
 		return
-	if o == null or bot.is_dead or bot.carried_by != null or bot.rescue_role != 0 or bot.is_frozen or bot.downed:
+	# шаг 73: лезу по стене Пика — куда и когда, подсказывает стена
+	if o != null and not bot.is_dead and int(bot.snow.climb) == 3:
+		var mtn := get_tree().get_first_node_in_group("mountain")
+		var face: Node = mtn.get("face") if mtn else null
+		if face != null:
+			var inp: Array = face.bot_climb(bot, o)
+			bot.bot_move = inp[0]
+			if bool(inp[1]):
+				bot.bot_held["interact"] = true
+		return
+	if o == null or bot.is_dead or bot.carried_by != null or bot.rescue_role != 0 or bot.is_frozen or bot.downed \
+			or bot.snow.busy():
+		if bot.snow.buried and _bubble_t <= 0.0 and randf() < 0.008:
+			say("buried")
 		if bot.is_frozen and _bubble_t <= 0.0 and randf() < 0.008:
 			# изнутри лёд не разбить — зовём на помощь
 			say("iced")
@@ -138,10 +154,33 @@ func _physics_process(delta: float) -> void:
 		return
 	_phase_t += delta
 	var far: float = _flat(o.global_position, bot.global_position)
-	if far > 70.0 and command in ["follow", "carry", "throw"]:
+	if far > 70.0 and command in ["follow", "carry", "throw"] and not _gate_job(o) and not _self_riding() \
+			and (o as CharacterBody3D).get_platform_velocity().length() < 0.3 and o.is_on_floor() and not _owner_riding(o):
 		_teleport_near(o)
 		return
 
+	# хозяин скользит на пузе — пристраиваюсь сзади паровозиком; встал — встаю
+	if command == "follow" and not bot.is_swimming and not bot.is_diving:
+		if bool(o.get("belly")) and not bot.belly and far < 9.0 and bot.is_on_floor() and bot._can_belly():
+			var ov: Vector3 = o.velocity
+			ov.y = 0.0
+			var spot: Vector3 = o.global_position - ov.normalized() * 1.35 if ov.length() > 0.5 else o.global_position
+			var to := spot - bot.global_position
+			to.y = 0.0
+			bot.velocity = ov + to.limit_length(6.0)
+			bot._belly_start()
+		elif bot.belly and not bool(o.get("belly")) and bot._belly_t > 0.5:
+			bot._belly_end()
+		if bot.belly:
+			return
+		# хозяин сел отдохнуть рядом — и я присяду
+		if bool(o.get("sitting")) and far < 5.0 and not bot.sitting and bot._can_sit() and bot.is_on_floor() \
+				and Vector3(bot.velocity.x, 0.0, bot.velocity.z).length() < 1.0 and randf() < 0.02:
+			bot._sit_down()
+		elif bot.sitting and not bool(o.get("sitting")):
+			bot._stand_up()
+		if bot.sitting:
+			return
 	# сам упал в воду (не по команде) — выбираемся
 	if (bot.is_swimming or bot.is_diving) and command != "water":
 		_self_rescue(o)
@@ -165,6 +204,19 @@ func _physics_process(delta: float) -> void:
 				if _bubble_t <= 0.0:
 					say("rescue")
 		return
+	# кого-то завалило лавиной — бежим и откапываем (держим E)
+	if command in ["follow", "carry", "stay"] and bot.arms_count() > 0 and not bot.is_swimming and not bot.is_diving:
+		var bud := _buried_near(o)
+		if bud != null:
+			if _walk_to(bud.global_position, true, 1.5, delta):
+				var tb := bud.global_position - bot.global_position
+				bot.visual.rotation.y = atan2(-tb.x, -tb.z)
+				if bot.snow._dig_target == null:
+					bot.bot_press("interact")
+					if _bubble_t <= 0.0:
+						say("dig")
+				bot.bot_held["interact"] = true
+			return
 	# хозяин в воде — спасаем
 	if command in ["follow", "carry", "stay"] and (o.is_swimming or o.is_diving) and o.rescue_role == 0 \
 			and not bot.is_swimming and not bot.is_diving:
@@ -196,6 +248,17 @@ func _physics_process(delta: float) -> void:
 
 # ---------------------------------------------------------------------------
 func _follow(o: Node3D, delta: float) -> void:
+	# шаг 73: хозяин едет (кабина канатки и т. п.) — не бегу следом (с обрыва); догоню, когда приедет
+	if ((o as CharacterBody3D).get_platform_velocity().length() > 0.3 or _owner_riding(o)) and _flat(o.global_position, bot.global_position) > 4.0:
+		return
+	if _self_riding():
+		bot.bot_move = Vector2.ZERO
+		# шаг 110: кабина в пути — держусь за поручень, как люди
+		var mtn := get_tree().get_first_node_in_group("mountain")
+		var rw: Node = mtn.get("ropeway") if mtn else null
+		if rw != null and int(rw.get("docked")) < 0:
+			bot.bot_held["interact"] = true
+		return
 	# хозяин тащит тяжёлый ящик один — помогаем
 	var hp: Parcel = o.get("held_parcel")
 	if hp != null and hp.required_carriers > 1 and not hp.is_lifted():
@@ -348,11 +411,53 @@ func _gate_duty(o: Node3D, delta: float) -> bool:
 			continue
 		var t: Vector3 = g.bot_target(bot, o)
 		if t == Vector3.INF:
-			return false
+			continue                 # шаг 72: это препятствие не про нас — смотрим следующие
+		if g.has_method("bot_crank"):
+			# шаг 67: подъёмный мост — встаю к лебёдке и кручу (держу E) / жду и перебегаю
+			_walk_to(t, _flat(t, bot.global_position) > 5.0, 0.35, delta)
+			if g.bot_crank(bot, o):
+				bot.bot_move = Vector2.ZERO
+				bot.bot_held.erase("sprint")
+				var tw: Vector3 = g.global_position - bot.global_position
+				bot.camera_pivot.rotation.y = atan2(-tw.x, -tw.z)
+				bot.bot_held["interact"] = true
+				if _bubble_t <= 0.0:
+					say("winch")
+			return true
 		if _phase_t > 0.0 and _flat(t, bot.global_position) > 6.0 and _bubble_t <= 0.0:
 			say("gate")
 		_walk_to(t, _flat(t, bot.global_position) > 5.0, 0.1, delta)
 		return true
+	return false
+
+
+## Шаг 107: сам еду в кабине канатки (подсказываю оператору) — не прыгать за хозяином
+func _self_riding() -> bool:
+	var mtn := get_tree().get_first_node_in_group("mountain")
+	var rw: Node = mtn.get("ropeway") if mtn else null
+	return rw != null and rw.has_method("riding") and rw.riding(bot.global_position)
+
+
+## Шаг 73: хозяин в кабине канатки — не появляться рядом (вытолкну его)
+func _owner_riding(o: Node3D) -> bool:
+	var mtn := get_tree().get_first_node_in_group("mountain")
+	var rw: Node = mtn.get("ropeway") if mtn else null
+	var sp: Node = mtn.get("spires") if mtn else null
+	# шаг 77: хозяин прыгает по выступам пропасти — жду у края (туда не телепортироваться)
+	if sp != null and sp.in_field(o.global_position):
+		return true
+	return rw != null and rw.in_cabin(o.global_position)
+
+
+## Шаг 73: у бота есть дело у ворот рядом с ним (держит оттяжку внизу, пока хозяин наверху) — не телепортировать
+func _gate_job(o: Node3D) -> bool:
+	for g in get_tree().get_nodes_in_group("coop_gate"):
+		if bool(g.get("is_open")):
+			continue
+		if (g as Node3D).global_position.distance_to(bot.global_position) > 70.0:
+			continue
+		if g.bot_target(bot, o) != Vector3.INF:
+			return true
 	return false
 
 
@@ -484,10 +589,36 @@ func _walk_to(p: Vector3, run: bool, stop: float, delta: float) -> bool:
 	return false
 
 
+## Заваленный снегом дрон рядом (хозяин — в первую очередь)
+func _buried_near(o: Node3D) -> Node3D:
+	if o.get("snow") != null and o.snow.buried and _flat(o.global_position, bot.global_position) < 60.0:
+		return o
+	for d in get_tree().get_nodes_in_group("player"):
+		if d != bot and d.get("snow") != null and d.snow.buried and _flat(d.global_position, bot.global_position) < 40.0:
+			return d
+	return null
+
+
 func _teleport_near(o: Node3D) -> void:
 	var back: Vector3 = o.get("visual").global_basis.z
 	back.y = 0.0
-	bot.global_position = o.global_position + back.normalized() * 2.5 + Vector3.UP * 0.8
+	back = back.normalized() if back.length() > 0.01 else Vector3.BACK
+	# шаг 73: место рядом — только там, где под ногами твёрдо и на той же высоте (не за краем обрыва)
+	var space := bot.get_world_3d().direct_space_state
+	var op := o.global_position
+	var spot := op + Vector3.UP * 1.6
+	for dir in [back, back.rotated(Vector3.UP, PI * 0.5), back.rotated(Vector3.UP, -PI * 0.5), -back]:
+		for dist in [2.5, 1.5]:
+			var q := op + (dir as Vector3) * float(dist)
+			var rq := PhysicsRayQueryParameters3D.create(q + Vector3.UP * 1.5, q + Vector3.DOWN * 1.5)
+			rq.exclude = [bot.get_rid(), o.get_rid()]
+			var hit := space.intersect_ray(rq)
+			if hit and absf((hit["position"] as Vector3).y - op.y) < 1.0:
+				spot = (hit["position"] as Vector3) + Vector3.UP * 0.8
+				break
+		if spot.y < op.y + 1.5:
+			break
+	bot.global_position = spot
 	bot.velocity = Vector3.ZERO
 
 

@@ -177,8 +177,17 @@ func _physics_process(delta: float) -> void:
 			var carry = holder.suit.limb_carry_xform()
 			if carry != null:
 				tgt = carry
-			# плавно — из руки на плечо, с земли в руку
-			global_transform = global_transform.orthonormalized().interpolate_with(tgt, clampf(delta * 16.0, 0.0, 1.0))
+			# плавно — из руки на плечо, с земли в руку; сглаживаю относительно тела держащего,
+			# иначе на бегу деталь отстаёт от кулака
+			var hv: Node3D = holder.get("visual") as Node3D if holder.get("visual") is Node3D else holder as Node3D
+			var ht := hv.global_transform.orthonormalized()
+			var cur_l := ht.affine_inverse() * global_transform.orthonormalized()
+			var tgt_l := ht.affine_inverse() * tgt
+			var fp := bool(holder.get("fp_view")) if holder.get("fp_view") != null else false
+			# от 1-го лица: долетела до кулака — дальше держится в нём намертво (иначе на бегу «плавает» перед глазами)
+			_fp_settle = _fp_settle + delta if fp else 0.0
+			var k := 1.0 if _fp_settle > 0.3 else clampf(delta * 16.0, 0.0, 1.0)
+			global_transform = ht * cur_l.interpolate_with(tgt_l, k)
 		return
 	if _rep_on:
 		_rep_end()
@@ -202,6 +211,9 @@ func _physics_process(delta: float) -> void:
 
 
 ## Запасной хват: в кулаке, как дубинка (когда на плечо нельзя — плыву и т.п.)
+var _fp_settle := 0.0
+
+
 func _hold_xform() -> Transform3D:
 	var h := holder
 	var idx: int = 1 if bool(h.suit.has_limb("arm_r")) else 0

@@ -23,6 +23,7 @@ uniform float crack_amount = 0.45;
 uniform float band_amount = 0.35;
 uniform float glow = 0.06;
 uniform float band_scale = 9.0;   // частота слоёв (по высоте модели)
+uniform float depth_dark = 0.0;   // 1 — обрывы каньона: книзу лёд темнеет (глубина)
 
 varying vec3 wp;
 varying vec3 wn;
@@ -68,9 +69,11 @@ void fragment() {
 	float up = smoothstep(thr, thr + 0.32, wn.y + (n2 - 0.5) * 0.35) * min(snow_amount, 1.0) * (1.0 - polish);
 	col = mix(col, snow * (0.92 + 0.1 * n2), up);
 	col *= COLOR.rgb;
+	float dd = 1.0 - depth_dark * 0.82 * smoothstep(-6.0, -56.0, wp.y);
+	col *= dd;
 	ALBEDO = col;
 	ROUGHNESS = mix(mix(base_rough + cloud * milk * 0.25, 0.04, polish), 0.85, up);
 	SPECULAR = mix(0.55, 0.8, polish);
 	// слабое свечение толщи льда (как просвет)
-	EMISSION = mid * (glow + 0.05 * polish) * (1.0 - up);
+	EMISSION = mid * (glow + 0.05 * polish) * (1.0 - up) * dd;
 }

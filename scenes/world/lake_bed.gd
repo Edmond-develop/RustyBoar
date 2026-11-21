@@ -28,19 +28,23 @@ func _ready() -> void:
 
 ## Случайная точка на дне: чаще — недалеко от полыней (там люди ныряют)
 func _spot(holes: Array[Vector3], near: float) -> Vector3:
-	var x: float
-	var z: float
-	if not holes.is_empty() and _rng.randf() < near:
-		var h: Vector3 = holes[_rng.randi() % holes.size()]
-		var a := _rng.randf() * TAU
-		var d := h.z + _rng.randf_range(0.0, 22.0)
-		x = h.x + cos(a) * d
-		z = h.y + sin(a) * d
-	else:
-		x = _rng.randf_range(-IceRiver.LAKE_HALF + 4.0, IceRiver.LAKE_HALF - 4.0)
-		z = _rng.randf_range(IceRiver.LAKE_Z_END + 4.0, IceRiver.LAKE_Z_START - 4.0)
-	x = clampf(x, -IceRiver.LAKE_HALF + 3.0, IceRiver.LAKE_HALF - 3.0)
-	z = clampf(z, IceRiver.LAKE_Z_END + 3.0, IceRiver.LAKE_Z_START - 3.0)
+	var x := 0.0
+	var z := 0.0
+	# точка должна быть под льдом озера (не в пропасти каньона и не на берегу)
+	for attempt in 24:
+		if not holes.is_empty() and _rng.randf() < near:
+			var h: Vector3 = holes[_rng.randi() % holes.size()]
+			var a := _rng.randf() * TAU
+			var d := h.z + _rng.randf_range(0.0, 22.0)
+			x = h.x + cos(a) * d
+			z = h.y + sin(a) * d
+		else:
+			x = _rng.randf_range(-IceRiver.FIELD_HALF + 4.0, IceRiver.FIELD_HALF - 4.0)
+			z = _rng.randf_range(IceRiver.LAKE_Z_END + 4.0, IceRiver.LAKE_Z_START - 4.0)
+		if IceRiver.in_lake(x, z, 3.0):
+			break
+		x = 0.0
+		z = 600.0
 	return Vector3(x, IceRiver.bed_y(x, z), z)
 
 

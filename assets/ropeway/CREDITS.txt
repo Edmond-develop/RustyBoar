@@ -1,0 +1,9 @@
+Ассеты канатки (шаг 114)
+
+Рычаги (Lever1, Lever13, Lever9, Gradients.jpg) — "Levers and Switches" by loafbrr
+  https://loafbrr.itch.io/leversandswitches — лицензия CC BY 4.0 (нужно указывать автора).
+Кнопки (RedButton, GreenButton, BlueButton) — "Low Poly Interactables Pack" by nowhere0
+  https://nowhere0.itch.io/low-poly-interactables-pack
+Металл пульта (вырезан из текстуры Control Panel) — "Free CC0 Sci-Fi Props" by 3dmodelscc0
+  https://3dmodelscc0.itch.io/free-cc0-scifi-props — CC0.
+Скалы и валуны: boulder_01, coastal_cliff_01, cliff_side — Poly Haven, https://polyhaven.com — CC0.

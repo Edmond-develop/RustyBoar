@@ -434,7 +434,7 @@ offset_right = 420.0
 offset_bottom = 180.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
 theme_override_constants/outline_size = 6
-text = "WASD — движение     Мышь — камера
+text = "WASD — движение     Мышь — камера     L — вид от 1-го лица
 Пробел — прыжок (короткое нажатие — ниже)
 Shift — бег (тратит выносливость)     Ctrl / C — тихо
 E — взять / положить     Q — бросить
